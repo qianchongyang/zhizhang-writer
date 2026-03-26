@@ -14,12 +14,14 @@ from typing import Optional, List, Dict
 
 class BatchWriter:
     def __init__(self, project_root: Path, from_chapter: int, to_chapter: int,
-                 night_mode: bool = False, max_calls: int = 1400):
+                 night_mode: bool = False, max_calls: int = 1400,
+                 min_quality_score: float = 75.0):
         self.project_root = project_root
         self.from_chapter = from_chapter
         self.to_chapter = to_chapter
         self.night_mode = night_mode
         self.max_calls = max_calls
+        self.min_quality_score = min_quality_score
         self.current_chapter = from_chapter
         self.completed_chapters: List[int] = []
         self.failed_chapters: List[Dict] = []
@@ -107,6 +109,19 @@ class BatchWriter:
         # 简单估算：每50行输出约1次API调用
         return max(1, len(lines) // 50)
 
+    def check_quality(self, chapter: int) -> bool:
+        """检查章节质量分数"""
+        score = self.get_chapter_score(chapter)
+        if score is None:
+            return True  # 如果无法获取分数，默认通过
+        return score >= self.min_quality_score
+
+    def get_chapter_score(self, chapter: int) -> Optional[float]:
+        """获取章节质量分数"""
+        # 从review_metrics表读取本章分数
+        # TODO: 实现从index.db读取分数的逻辑
+        return None  # 暂时返回None，使用默认逻辑
+
     def run(self):
         """执行批量写作"""
         print("批量写作开始")
@@ -118,6 +133,12 @@ class BatchWriter:
                 break
 
             chapter = self.current_chapter
+
+            # 质量检查
+            if not self.check_quality(chapter):
+                print(f"⚠️ 第 {chapter} 章质量分数低于阈值，停止批量写作")
+                self.save_progress()
+                break
             print(f"\n开始写入第 {chapter} 章")
 
             try:

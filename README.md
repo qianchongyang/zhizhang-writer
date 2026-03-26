@@ -120,7 +120,6 @@ model: sonnet
 |------|------|
 | **v5.6.0 (当前)** | **状态追踪 + 变更检测系统**：<br/>**Phase 1 - Schema 扩展**：新增 `character_states`（外貌/穿着/性别表达）、`item_states`（物品数量）、`time_states`（时间线）追踪。<br/>**Phase 2 - Data Agent 增强**：AI 实体提取步骤新增状态提取逻辑，支持自动识别外貌变化、物品数量、时间标记。<br/>**Phase 3 - Consistency Checker 升级**：新增 APPEARANCE_CHANGE、ITEM_QUANTITY_CHANGE、TIMELINE_REGRESSION、GENDER_IDENTITY_CONFLICT 四种违规检测，输出结构化修复指引。<br/>**审查增强**：logic-bug-checker（杠精读者视角）、叙事视角一致性检查、世界观术语一致性检查。 |
 | **v5.5.4** | 补齐写作链提示词强约束（流程硬约束、中文思维写作约束、Step 职责边界）；统一中文化审查/润色/Agent 报告文案；清理文档内部版本号与版本历史，降低与插件发版版本混淆。 |
-| **v5.5.4** | 补齐写作链提示词强约束（流程硬约束、中文思维写作约束、Step 职责边界）；统一中文化审查/润色/Agent 报告文案；清理文档内部版本号与版本历史，降低与插件发版版本混淆。 |
 | **v5.5.3** | 新增统一 `preflight` 预检命令；写作链 CLI 示例统一为 UTF-8 运行方式，收口文档中的长 shell 预检片段并降低 Windows 终端乱码风险。 |
 | **v5.5.2** | 支持将详细大纲中的章节名同步到正文文件名；修复 workflow_manager 在无参 find_project_root monkeypatch 下的兼容性问题。 |
 | **v5.5.1** | 修复卷级单文件大纲在上下文快照中的章节提取问题；补齐命令文档中遗漏的 `/webnovel-dashboard` 与 `/webnovel-learn`。 |

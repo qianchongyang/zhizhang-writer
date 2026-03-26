@@ -175,17 +175,25 @@ cat "{project_root}/大纲/第{volume_id}卷-时间线.md"
 
 ### Step 2: 追读力与债务（按需）
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index get-recent-reading-power --limit 5
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index get-pattern-usage-stats --last-n 20
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index get-hook-type-stats --last-n 20
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index get-debt-summary
+# 批量查询（节省3次CLI调用）
+CONTEXT_DATA="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" batch-query --queries '[
+    {"type": "get-recent-reading-power", "limit": 5},
+    {"type": "get-pattern-usage-stats", "last_n": 20},
+    {"type": "get-hook-type-stats", "last_n": 20},
+    {"type": "get-debt-summary"}
+]')"
 ```
+解析结果：`echo "${CONTEXT_DATA}" | jq -r '.results[] | ...'`
 
 ### Step 3: 实体与最近出场 + 伏笔读取
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index get-core-entities
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index recent-appearances --limit 20
+# 批量查询（节省2次CLI调用）
+ENTITY_DATA="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" batch-query --queries '[
+    {"type": "get-core-entities"},
+    {"type": "recent-appearances", "limit": 20}
+]')"
 ```
+解析结果：`echo "${ENTITY_DATA}" | jq -r '.results[] | ...'`
 
 - 从 `state.json` 读取：
   - `progress.current_chapter`

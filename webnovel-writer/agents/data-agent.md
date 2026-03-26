@@ -104,12 +104,24 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" wher
 
 ### Step D: 写入存储
 
- **写入 index.db (实体/别名/状态变化/关系)**:
+**写入 index.db (实体/别名/状态变化/关系)**:
+
+```bash
+# 批量写入（节省 N-1 次 CLI 调用，优化 ~200-500ms/次）
+DATA_WRITE_RESULT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" batch-write --writes '[
+    {"type": "upsert-entity", "data": {...}},
+    {"type": "register-alias", "alias": "红衣女子", "entity": "hongyi_girl", "entity_type": "角色"},
+     {"type": "record-state-change", "data": {...}},
+     {"type": "upsert-relationship", "data": {...}}
+ ]')"
+ ```
+
+ **备用的单次写入方式**（如 batch-write 不可用时）:
  ```bash
-  python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index upsert-entity --data '{...}'
-  python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index register-alias --alias "红衣女子" --entity "hongyi_girl" --type "角色"
-  python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index record-state-change --data '{...}'
-  python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index upsert-relationship --data '{...}'
+ # python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index upsert-entity --data '{...}'
+ # python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index register-alias --alias "红衣女子" --entity "hongyi_girl" --type "角色"
+ # python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index record-state-change --data '{...}'
+ # python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" index upsert-relationship --data '{...}'
  ```
 
  **更新精简版 state.json**:

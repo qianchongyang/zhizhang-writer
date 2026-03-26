@@ -205,6 +205,22 @@ cat "${SKILL_ROOT}/references/style-adapter.md"
 输出：
 - 风格化正文（覆盖原章节文件）。
 
+## 审查器分组
+
+### 组1：核心审查器（必须同时执行）
+- `consistency-checker` - 设定一致性
+- `continuity-checker` - 连贯性
+- `ooc-checker` - 人物OOC
+
+### 组2：扩展审查器（条件执行）
+- `reader-pull-checker` - 追读力
+- `high-point-checker` - 爽点
+- `pacing-checker` - 节奏
+
+### 分组执行规则
+- 组1必须全部执行，结果合并到 `rev1_ch{NNNN}.json`
+- 组2按 `auto` 路由执行，结果合并到 `rev2_ch{NNNN}.json`
+
 ### Step 3：审查（auto 路由，必须由 Task 子代理执行）
 
 执行前加载：
@@ -215,17 +231,21 @@ cat "${SKILL_ROOT}/references/step-3-review-gate.md"
 调用约束：
 - 必须用 `Task` 调用审查 subagent，禁止主流程伪造审查结论。
 - 可并行发起审查，统一汇总 `issues/severity/overall_score`。
-- 默认使用 `auto` 路由：根据“本章执行合同 + 正文信号 + 大纲标签”动态选择审查器。
+- 默认使用 `auto` 路由：根据"本章执行合同 + 正文信号 + 大纲标签"动态选择审查器。
 
 核心审查器（始终执行）：
 - `consistency-checker`
 - `continuity-checker`
 - `ooc-checker`
 
+> **分组说明**：以上3个审查器为组1，执行后结果写入 `.webnovel/tmp/agent_outputs/rev1_ch{NNNN}.json`
+
 条件审查器（`auto` 命中时执行）：
 - `reader-pull-checker`
 - `high-point-checker`
 - `pacing-checker`
+
+> **分组说明**：以上审查器为组2，按 `auto` 路由执行，结果写入 `.webnovel/tmp/agent_outputs/rev2_ch{NNNN}.json`
 
 模式说明：
 - 标准/`--fast`：核心 3 个 + auto 命中的条件审查器

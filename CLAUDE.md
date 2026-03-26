@@ -110,6 +110,40 @@ python "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>
 python "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" status -- --focus all
 ```
 
+## GitHub PR 更新规则
+
+**重要：提交 PR 合并后，必须自动更新本地小说项目。**
+
+### 规则
+
+1. **提交 PR 时**：
+   - 确保 `.gitignore` 包含 `.env`、`*.key`、`credentials.json` 等敏感文件
+   - 在 PR body 中包含变更说明和版本升级信息
+
+2. **PR 合并后**（自动执行，无需用户确认）：
+   ```bash
+   # 1. 更新本地 webnovel-writer 仓库
+   git checkout master && git pull mine master
+
+   # 2. 重新安装插件
+   claude plugin install webnovel-writer@qianchongyang/webnovel-writer --scope user --force
+
+   # 3. 验证插件版本
+   claude plugin list | grep webnovel-writer
+   ```
+
+3. **版本号升级规则**：
+   - 每次功能更新必须升级版本号
+   - 版本号格式：`X.Y.Z`（语义化版本）
+   - 更新文件：
+     - `webnovel-writer/.claude-plugin/plugin.json`
+     - `.claude-plugin/marketplace.json`
+     - `README.md` 更新日志
+
+4. **敏感信息保护**：
+   - 绝对不能提交 `.env`、API keys、credentials
+   - `.gitignore` 必须包含：`.env`、`*.pem`、`*.key`、`credentials.json`
+
 ## 参考文档
 
 - 架构详解：`docs/architecture.md`

@@ -206,6 +206,7 @@ if __name__ == "__main__":
     p_run.add_argument("--to", dest="to_chapter", type=int, required=True)
     p_run.add_argument("--night-mode", action="store_true")
     p_run.add_argument("--max-calls", type=int, default=1400)
+    p_run.add_argument("--min-quality-score", type=float, default=75.0, help="最低质量分数阈值")
 
     # resume子命令
     p_resume = subparsers.add_parser("resume", help="恢复批量写作")
@@ -222,6 +223,7 @@ if __name__ == "__main__":
             args.from_chapter,
             args.to_chapter,
             args.night_mode,
-            args.max_calls
+            args.max_calls,
+            args.min_quality_score
         )
         writer.run()

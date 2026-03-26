@@ -118,7 +118,8 @@ model: sonnet
 
 | 版本 | 说明 |
 |------|------|
-| **v5.5.4 (当前)** | 补齐写作链提示词强约束（流程硬约束、中文思维写作约束、Step 职责边界）；统一中文化审查/润色/Agent 报告文案；清理文档内部版本号与版本历史，降低与插件发版版本混淆。 |
+| **v5.6.0 (当前)** | **Phase 1-3 核心优化完成**：<br/>**Phase 1 - Agent Teams 架构**：中间层协议规范、Context/Data Agent 独立输出模式、审查器分组并行执行、主 Agent 精简上下文加载。<br/>**Phase 2 - Token 优化**：batch-query/batch-write 批量接口，CLI 调用合并。<br/>**Phase 3 - 自动化创作**：BatchWriter 批量写作控制器、进度跟踪、异常处理、夜间模式（--max-calls）、质量门控（--min-quality-score）。<br/>**审查增强**：新增 logic-bug-checker（杠精读者视角）、叙事视角一致性检查（防止主角提及章节号）、世界观术语一致性检查（防止穿越者暴露现代术语）。 |
+| **v5.5.4** | 补齐写作链提示词强约束（流程硬约束、中文思维写作约束、Step 职责边界）；统一中文化审查/润色/Agent 报告文案；清理文档内部版本号与版本历史，降低与插件发版版本混淆。 |
 | **v5.5.3** | 新增统一 `preflight` 预检命令；写作链 CLI 示例统一为 UTF-8 运行方式，收口文档中的长 shell 预检片段并降低 Windows 终端乱码风险。 |
 | **v5.5.2** | 支持将详细大纲中的章节名同步到正文文件名；修复 workflow_manager 在无参 find_project_root monkeypatch 下的兼容性问题。 |
 | **v5.5.1** | 修复卷级单文件大纲在上下文快照中的章节提取问题；补齐命令文档中遗漏的 `/webnovel-dashboard` 与 `/webnovel-learn`。 |

@@ -266,3 +266,55 @@ Context Contract 必须字段（不可缺）：
 10. ✅ 逻辑红线校验通过（fail=0）
 11. ✅ **时间约束板块完整**（上章时间锚点、本章时间锚点、允许推进跨度、过渡要求、倒计时状态）
 12. ✅ **时间逻辑红线通过**（无回跳、无倒计时跳跃、大跨度有过渡要求）
+
+---
+
+## 新增：独立输出模式
+
+当传入 `--output-file` 参数时，Context Agent 将结果写入指定JSON文件而非直接输出stdout。
+
+### 输入参数（新增）
+- `output_file`: 输出JSON文件路径，如 `.webnovel/tmp/agent_outputs/ctx_ch0100.json`
+
+### 输出格式
+```json
+{
+  "version": "1.0",
+  "chapter": 100,
+  "timestamp": "2026-03-26T10:00:00Z",
+  "task_summary": "萧炎在天云宗获得传承，突破斗师",
+  "constraints": ["主线不动摇", "战力严格递增"],
+  "style_guide": "战斗场面详尽，感情线克制",
+  "entities_in_chapter": ["xiaoyan", "master", "tianyun_sect"],
+  "context_contract": {
+    "目标": "...",
+    "阻力": "...",
+    "代价": "...",
+    "本章变化": "...",
+    "未闭合问题": "...",
+    "开头类型": "...",
+    "情绪节奏": "...",
+    "追读力设计": "..."
+  },
+  "writing_prompt": {
+    "beat_sheet": "...",
+    "immutable_facts": [...],
+    "prohibitions": [...],
+    "final_checklist": [...]
+  }
+}
+```
+
+### CLI调用方式
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  context \
+  --chapter ${chapter_num} \
+  --output-file "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json"
+```
+
+### 执行流程
+1. 解析参数，获取 output_file
+2. 执行原有的Context Agent逻辑（读取state.json、大纲等）
+3. 将输出转换为精简JSON格式，写入 output_file
+4. 不再输出完整执行包到stdout

@@ -5,6 +5,7 @@
 """
 
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -61,6 +62,51 @@ class BatchWriter:
         remaining = self.max_calls - self.total_calls
         return remaining >= 50  # 留50次余量
 
+    def write_chapter(self, chapter: int) -> Dict:
+        """调用Claude Code执行单章写作"""
+        cmd = [
+            "claude-code",
+            "--dangerously-skip-permanent-cache",
+            f"/webnovel-write {chapter}"
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=str(self.project_root),
+                capture_output=True,
+                text=True,
+                timeout=600  # 10分钟超时
+            )
+
+            if result.returncode == 0:
+                calls_used = self.estimate_calls(result.stdout + result.stderr)
+                return {
+                    "success": True,
+                    "calls_used": calls_used
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": result.stderr or "未知错误"
+                }
+        except subprocess.TimeoutExpired:
+            return {
+                "success": False,
+                "error": "章节写作超时（10分钟）"
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    def estimate_calls(self, output: str) -> int:
+        """估算调用次数"""
+        lines = output.strip().split("\n")
+        # 简单估算：每50行输出约1次API调用
+        return max(1, len(lines) // 50)
+
     def run(self):
         """执行批量写作"""
         print("批量写作开始")
@@ -75,11 +121,21 @@ class BatchWriter:
             print(f"\n开始写入第 {chapter} 章")
 
             try:
-                # 这里先简单模拟，后续Task 2会实现真正的调用
-                self.completed_chapters.append(chapter)
+                result = self.write_chapter(chapter)
+
+                if result["success"]:
+                    self.completed_chapters.append(chapter)
+                    self.total_calls += result.get("calls_used", 50)
+                    print(f"✅ 第 {chapter} 章完成")
+                else:
+                    self.failed_chapters.append({
+                        "chapter": chapter,
+                        "error": result.get("error", "未知错误")
+                    })
+                    print(f"❌ 第 {chapter} 章失败: {result.get('error')}")
+
                 self.current_chapter += 1
                 self.save_progress()
-                time.sleep(1)
 
             except KeyboardInterrupt:
                 print("\n用户中断批量写作")

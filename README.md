@@ -118,7 +118,8 @@ model: sonnet
 
 | 版本 | 说明 |
 |------|------|
-| **v5.6.0 (当前)** | **Phase 1-3 核心优化完成**：<br/>**Phase 1 - Agent Teams 架构**：中间层协议规范、Context/Data Agent 独立输出模式、审查器分组并行执行、主 Agent 精简上下文加载。<br/>**Phase 2 - Token 优化**：batch-query/batch-write 批量接口，CLI 调用合并。<br/>**Phase 3 - 自动化创作**：BatchWriter 批量写作控制器、进度跟踪、异常处理、夜间模式（--max-calls）、质量门控（--min-quality-score）。<br/>**审查增强**：新增 logic-bug-checker（杠精读者视角）、叙事视角一致性检查（防止主角提及章节号）、世界观术语一致性检查（防止穿越者暴露现代术语）。 |
+| **v5.6.0 (当前)** | **状态追踪 + 变更检测系统**：<br/>**Phase 1 - Schema 扩展**：新增 `character_states`（外貌/穿着/性别表达）、`item_states`（物品数量）、`time_states`（时间线）追踪。<br/>**Phase 2 - Data Agent 增强**：AI 实体提取步骤新增状态提取逻辑，支持自动识别外貌变化、物品数量、时间标记。<br/>**Phase 3 - Consistency Checker 升级**：新增 APPEARANCE_CHANGE、ITEM_QUANTITY_CHANGE、TIMELINE_REGRESSION、GENDER_IDENTITY_CONFLICT 四种违规检测，输出结构化修复指引。<br/>**审查增强**：logic-bug-checker（杠精读者视角）、叙事视角一致性检查、世界观术语一致性检查。 |
+| **v5.5.4** | 补齐写作链提示词强约束（流程硬约束、中文思维写作约束、Step 职责边界）；统一中文化审查/润色/Agent 报告文案；清理文档内部版本号与版本历史，降低与插件发版版本混淆。 |
 | **v5.5.4** | 补齐写作链提示词强约束（流程硬约束、中文思维写作约束、Step 职责边界）；统一中文化审查/润色/Agent 报告文案；清理文档内部版本号与版本历史，降低与插件发版版本混淆。 |
 | **v5.5.3** | 新增统一 `preflight` 预检命令；写作链 CLI 示例统一为 UTF-8 运行方式，收口文档中的长 shell 预检片段并降低 Windows 终端乱码风险。 |
 | **v5.5.2** | 支持将详细大纲中的章节名同步到正文文件名；修复 workflow_manager 在无参 find_project_root monkeypatch 下的兼容性问题。 |

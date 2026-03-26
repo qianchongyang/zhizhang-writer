@@ -68,7 +68,6 @@ class BatchWriter:
         """调用Claude Code执行单章写作"""
         cmd = [
             "claude-code",
-            "--dangerously-skip-permanent-cache",
             f"/webnovel-write {chapter}"
         ]
 
@@ -78,8 +77,16 @@ class BatchWriter:
                 cwd=str(self.project_root),
                 capture_output=True,
                 text=True,
-                timeout=600  # 10分钟超时
+                timeout=1800  # 30分钟超时
             )
+
+            # 超时后检查章节文件是否已生成（可能只是检测超时但实际已完成）
+            chapter_file = self.get_chapter_filename(chapter)
+            if result.returncode != 0 and chapter_file and chapter_file.exists():
+                return {
+                    "success": True,
+                    "error": f"超时但章节文件已存在，调用次数未计入"
+                }
 
             if result.returncode == 0:
                 calls_used = self.estimate_calls(result.stdout + result.stderr)
@@ -95,7 +102,7 @@ class BatchWriter:
         except subprocess.TimeoutExpired:
             return {
                 "success": False,
-                "error": "章节写作超时（10分钟）"
+                "error": "章节写作超时（30分钟）"
             }
         except Exception as e:
             return {

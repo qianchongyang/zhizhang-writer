@@ -74,6 +74,12 @@ class DataAgentOutput(BaseModel):
     scenes_chunked: int = 0
     uncertain: List[UncertainMention] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+    # v5.6 新增：角色状态追踪
+    character_states: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    # v5.6 新增：物品状态追踪
+    item_states: Dict[str, Dict[str, Any]] = Field(default_factory=dict)
+    # v5.6 新增：时间状态追踪
+    time_states: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ErrorSchema(BaseModel):

@@ -58,7 +58,22 @@ model: inherit
   "uncertain": [
     {"mention": "那位前辈", "candidates": [{"type": "角色", "id": "yaolao"}, {"type": "角色", "id": "elder_zhang"}], "confidence": 0.6}
   ],
-  "warnings": []
+  "warnings": [],
+  "character_states": {
+    "吴彤": {
+      "appearance": ["白面无须"],
+      "clothing": ["素净长袍"],
+      "gender_expression": ["男性"]
+    }
+  },
+  "item_states": {
+    "灵石": {"quantity": 6, "unit": "块"},
+    "丹药": {"quantity": 3, "unit": "枚"}
+  },
+  "time_states": {
+    "current_date": "3021年三月初五",
+    "countdown": {"event": "宗门大比", "days_remaining": 26}
+  }
 }
 ```
 
@@ -91,6 +106,89 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" wher
 ### Step B: AI 实体提取
 
 **Data Agent 直接执行** (无需调用外部 LLM)。
+
+#### B-1: 基础实体提取
+
+从章节正文中提取：
+- 角色、地点、物品、势力、招式
+- 状态变化（如境界突破、地点迁移）
+- 关系建立/解除
+
+#### B-2: 角色状态提取 (v5.6 新增)
+
+从叙述和对话中提取角色外貌/穿着/性别表达状态：
+
+```
+角色外貌变化描述：
+- "吴彤摸了摸下巴，胡子已经三天没刮了" → 大胡子状态维持
+- "吴彤换上了一身素净的长袍" → 衣着变化
+- "她今天化了淡妆" → 外观变化
+- "他看起来精神多了，胡子也刮得干干净净" → 外貌从 ["大胡子"] 变为 ["白面无须"]
+
+性别表达提取：
+- 观察角色行为是否符合已知的性别表达
+- 记录任何跨性别表达的行为描述
+```
+
+**提取格式**：
+```json
+{
+  "character_states": {
+    "吴彤": {
+      "appearance": ["大胡子"],
+      "clothing": ["外门弟子服"],
+      "gender_expression": ["男性"]
+    }
+  }
+}
+```
+
+#### B-3: 物品数量提取 (v5.6 新增)
+
+从正文中提取物品数量变化：
+
+```
+物品数量变化：
+- "他将六块灵石收入袋中" → 灵石: quantity=6
+- "五块灵石只剩一块" → 灵石: quantity=1 (检测到数量变化)
+- "还剩三枚丹药" → 丹药: quantity=3
+```
+
+**提取格式**：
+```json
+{
+  "item_states": {
+    "灵石": {"quantity": 6, "unit": "块"},
+    "丹药": {"quantity": 3, "unit": "枚"}
+  }
+}
+```
+
+#### B-4: 时间标记提取 (v5.6 新增)
+
+从正文中提取时间/日期信息：
+
+```
+时间标记提取：
+- "三月初五" → current_date="3021年三月初五" (需结合年份)
+- "翌日清晨" → 时间推进标记
+- "三天后" → 时间跳跃标记
+- "回到一年前" → 闪回标记
+
+倒计时提取：
+- "D-5" → 倒计时标记（需转换为叙述文字）
+- "距离宗门大比还有二十六天" → 倒计时信息
+```
+
+**提取格式**：
+```json
+{
+  "time_states": {
+    "current_date": "3021年三月初五",
+    "countdown": {"event": "宗门大比", "days_remaining": 26}
+  }
+}
+```
 
 ### Step C: 实体消歧处理
 
@@ -135,6 +233,9 @@ DATA_WRITE_RESULT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root 
 - 更新 `strand_tracker`
 - 更新 `disambiguation_warnings/pending`
 - **新增 `chapter_meta`**（钩子/模式/结束状态）
+- **更新 `character_states`**（角色外貌/穿着/性别表达状态）
+- **更新 `item_states`**（物品数量状态）
+- **更新 `time_states`**（时间线状态）
 
 ### Step E: 生成章节摘要文件（新增）
 

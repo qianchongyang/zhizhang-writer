@@ -1,5 +1,13 @@
 .claude/settings.local.json
 
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+credentials.json
+
 # Python caches & virtualenv
 __pycache__/
 *.py[cod]

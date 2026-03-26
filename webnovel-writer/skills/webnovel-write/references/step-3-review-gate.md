@@ -141,3 +141,44 @@ else:
 - 时间回跳 → 添加闪回标记，或调整时间锚点
 - 大跨度无过渡 → 添加时间过渡句/段，或插入过渡章
 - 事件先后矛盾 → 调整事件发生顺序或添加时间跳跃说明
+
+## 内部元信息污染检测（新增）
+
+**问题根因**：AI在写作时将「规划阶段的内部元信息」和「系统输出」混入了「给读者看的叙事正文」。
+
+**Hard Block（必须修复才能继续）**：
+- `META_POLLUTION` + `severity = critical`（系统UI面板、倒计时标记等内部标记裸奔）
+- `META_POLLUTION` + `severity = high`（括号内系统状态、意识中直接读取坐标数据）
+
+**Soft Warning（建议修复但可继续）**：
+- `META_POLLUTION` + `severity = medium`（精确数值在内心OS中出现，如"12.7%的能量储备"）
+- `META_POLLUTION` + `severity = low`（轻微的系统状态词残留）
+
+**检测模式（必检）**：
+
+| 类别 | 模式 | 示例 |
+|------|------|------|
+| 倒计时裸奔 | `D-\d+` | `D-26。宗门大比越来越近。` |
+| 系统UI面板 | `「[^」]*\\|[^」]*」` | `「空间基础状态：正常 \| 能量储备：9.4%」` |
+| 括号系统状态 | `（待激活\|离线\|在线）` | `量子场谱仪（在线，功率12.7%）` |
+| 意识坐标数据 | `「[^」]*[XYZ]=[^」]*」` | `「坐标：X=0.3827, Y=0.6189」` |
+
+**闸门判定逻辑**：
+```text
+meta_issues = filter(issues, type="META_POLLUTION")
+critical_meta = filter(meta_issues, severity in ["critical", "high"])
+
+if len(critical_meta) > 0:
+    BLOCK: "存在 {len(critical_meta)} 个内部元信息污染，必须修复后才能进入润色步骤"
+    for issue in critical_meta:
+        print(f"- 第{issue.chapter}章: {issue.description}")
+    return BLOCKED
+else:
+    通过: "内部元信息检查通过"
+```
+
+**修复指引**：
+- 倒计时标记 → 转换为叙述文字，如"D-26"应改为"距离宗门大比还有二十六天"
+- 系统UI面板 → 转换为人物视角的感知描写，如"屏幕上跳动的绿色字符"
+- 括号系统状态 → 移除括号内状态词，或改写为正常描述
+- 意识坐标数据 → 转换为更自然的描述，如"一个精确的位置坐标"或直接省略

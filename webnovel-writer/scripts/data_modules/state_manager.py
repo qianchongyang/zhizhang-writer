@@ -186,6 +186,22 @@ class StateManager:
         if not isinstance(state.get("disambiguation_pending"), list):
             state["disambiguation_pending"] = []
 
+        # v5.6 引入: character_states - 追踪角色外貌/穿着/性别表达状态
+        if not isinstance(state.get("character_states"), dict):
+            state["character_states"] = {}
+
+        # v5.6 引入: item_states - 追踪物品数量状态
+        if not isinstance(state.get("item_states"), dict):
+            state["item_states"] = {}
+
+        # v5.6 引入: time_states - 追踪时间线状态
+        if not isinstance(state.get("time_states"), dict):
+            state["time_states"] = {
+                "current_date": "",
+                "chapter_last_update": 0,
+                "chronological_order": "consistent"  # or "violated"
+            }
+
         # progress 基础字段
         progress = state["progress"]
         if not isinstance(progress, dict):
@@ -614,6 +630,254 @@ class StateManager:
             self._pending_progress_chapter = max(self._pending_progress_chapter, chapter)
         if words > 0:
             self._pending_progress_words_delta += int(words)
+
+    # ==================== 角色状态追踪 (v5.6 新增) ====================
+
+    def get_character_state(self, character_id: str, state_type: str) -> Optional[Dict]:
+        """
+        获取角色指定类型的状态（如 appearance, clothing, gender_expression）
+
+        Args:
+            character_id: 角色ID
+            state_type: 状态类型 (appearance/clothing/gender_expression)
+
+        Returns:
+            状态字典，包含 value, chapter_last_seen, last_verified_chapter
+        """
+        character_states = self._state.get("character_states", {})
+        character = character_states.get(character_id, {})
+        return character.get(state_type)
+
+    def update_character_state(
+        self,
+        character_id: str,
+        state_type: str,
+        value: List[str],
+        chapter: int,
+        verified: bool = False
+    ) -> bool:
+        """
+        更新角色状态（用于 Data Agent 提取的状态变化）
+
+        Args:
+            character_id: 角色ID
+            state_type: 状态类型 (appearance/clothing/gender_expression)
+            value: 状态值列表，如 ["大胡子"]
+            chapter: 当前章节号
+            verified: 是否已验证（默认 False）
+
+        Returns:
+            是否成功更新
+        """
+        if not character_id or not state_type:
+            return False
+
+        character_states = self._state.setdefault("character_states", {})
+        character = character_states.setdefault(character_id, {})
+
+        # 保留历史 value 用于变更检测
+        old_state = character.get(state_type, {})
+        old_value = old_state.get("value", [])
+
+        # 更新状态
+        new_state = {
+            "value": value,
+            "chapter_last_seen": chapter,
+        }
+        if verified:
+            new_state["last_verified_chapter"] = chapter
+
+        character[state_type] = new_state
+
+        # 如果状态变化了，返回 True 以便记录变更
+        if old_value != value and old_value:
+            return True  # 状态发生变化
+        return False  # 状态未变化或首次添加
+
+    def get_character_states_all(self) -> Dict[str, Dict]:
+        """获取所有角色状态（用于 Consistency Checker 比对）"""
+        return self._state.get("character_states", {})
+
+    def detect_character_state_change(self, character_id: str, state_type: str, new_value: List[str]) -> Optional[Dict]:
+        """
+        检测角色状态是否发生变化（用于变更检测）
+
+        Args:
+            character_id: 角色ID
+            state_type: 状态类型
+            new_value: 新提取的状态值
+
+        Returns:
+            如果检测到变更，返回变更信息；否则返回 None
+        """
+        old_state = self.get_character_state(character_id, state_type)
+        if old_state is None:
+            return None  # 首次出现，不算变更
+
+        old_value = old_state.get("value", [])
+        if old_value != new_value:
+            return {
+                "entity": character_id,
+                "state_type": state_type,
+                "previous": old_value,
+                "current": new_value,
+                "chapter_last_seen": old_state.get("chapter_last_seen", 0)
+            }
+        return None
+
+    # ==================== 物品状态追踪 (v5.6 新增) ====================
+
+    def get_item_state(self, item_id: str) -> Optional[Dict]:
+        """
+        获取物品状态
+
+        Args:
+            item_id: 物品ID（如 "灵石"）
+
+        Returns:
+            状态字典，包含 quantity, chapter_last_seen, unit
+        """
+        item_states = self._state.get("item_states", {})
+        return item_states.get(item_id)
+
+    def update_item_state(
+        self,
+        item_id: str,
+        quantity: int,
+        chapter: int,
+        unit: str = "个"
+    ) -> bool:
+        """
+        更新物品数量状态
+
+        Args:
+            item_id: 物品ID
+            quantity: 当前数量
+            chapter: 当前章节号
+            unit: 单位
+
+        Returns:
+            是否检测到数量变化
+        """
+        if not item_id:
+            return False
+
+        item_states = self._state.setdefault("item_states", {})
+        old_state = item_states.get(item_id, {})
+
+        new_state = {
+            "quantity": quantity,
+            "chapter_last_seen": chapter,
+            "unit": unit
+        }
+        item_states[item_id] = new_state
+
+        # 检测数量变化
+        old_quantity = old_state.get("quantity")
+        if old_quantity is not None and old_quantity != quantity:
+            return True  # 数量发生变化
+        return False
+
+    def get_item_states_all(self) -> Dict[str, Dict]:
+        """获取所有物品状态（用于 Consistency Checker 比对）"""
+        return self._state.get("item_states", {})
+
+    def detect_item_quantity_change(self, item_id: str, new_quantity: int) -> Optional[Dict]:
+        """
+        检测物品数量是否发生变化
+
+        Args:
+            item_id: 物品ID
+            new_quantity: 新数量
+
+        Returns:
+            如果检测到变更，返回变更信息；否则返回 None
+        """
+        old_state = self.get_item_state(item_id)
+        if old_state is None:
+            return None  # 首次出现
+
+        old_quantity = old_state.get("quantity")
+        if old_quantity is not None and old_quantity != new_quantity:
+            return {
+                "item": item_id,
+                "previous_quantity": old_quantity,
+                "current_quantity": new_quantity,
+                "unit": old_state.get("unit", "个"),
+                "chapter_last_seen": old_state.get("chapter_last_seen", 0)
+            }
+        return None
+
+    # ==================== 时间状态追踪 (v5.6 新增) ====================
+
+    def get_time_state(self) -> Dict:
+        """获取当前时间线状态"""
+        return self._state.get("time_states", {})
+
+    def update_time_state(
+        self,
+        current_date: str,
+        chapter: int,
+        chronological_order: str = "consistent"
+    ) -> bool:
+        """
+        更新时间线状态
+
+        Args:
+            current_date: 当前日期字符串
+            chapter: 当前章节号
+            chronological_order: 时间顺序状态 (consistent/violated)
+
+        Returns:
+            是否检测到时间逆流
+        """
+        time_states = self._state.setdefault("time_states", {})
+
+        old_date = time_states.get("current_date", "")
+        old_chapter = time_states.get("chapter_last_update", 0)
+
+        time_states["current_date"] = current_date
+        time_states["chapter_last_update"] = chapter
+        time_states["chronological_order"] = chronological_order
+
+        # 检测时间逆流（通过日期比较）
+        # 注意：这里的日期比较是简单的字符串比较，假设格式为 "XXX年N月N日" 或类似格式
+        if old_date and old_chapter > 0:
+            if self._is_date_earlier(current_date, old_date):
+                time_states["chronological_order"] = "violated"
+                return True  # 检测到时间逆流
+        return False
+
+    def _is_date_earlier(self, date1: str, date2: str) -> bool:
+        """
+        判断 date1 是否早于 date2（简单实现，支持 "XXX年N月N日" 格式）
+
+        Args:
+            date1: 日期字符串1
+            date2: 日期字符串2
+
+        Returns:
+            date1 是否早于 date2
+        """
+        import re
+
+        def parse_date(date_str: str) -> tuple:
+            """解析日期字符串为 (年, 月, 日) 元组"""
+            match = re.match(r"(\d+)年(\d+)月(\d+)日", date_str)
+            if match:
+                return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+            # 尝试其他格式
+            match = re.match(r"(\d+)-(\d+)-(\d+)", date_str)
+            if match:
+                return (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+            return (0, 0, 0)
+
+        try:
+            y1, m1, d1 = parse_date(date1)
+            y2, m2, d2 = parse_date(date2)
+            return (y1, m1, d1) < (y2, m2, d2)
+        except (ValueError, AttributeError):
+            return False
 
     # ==================== 实体管理 (v5.1 SQLite-first) ====================
 
@@ -1086,6 +1350,34 @@ class StateManager:
             self._state.setdefault("chapter_meta", {})
             self._state["chapter_meta"][meta_key] = chapter_meta
             self._pending_chapter_meta[meta_key] = chapter_meta
+
+        # v5.6 新增: 处理角色状态（外貌/穿着/性别表达）
+        for character_id, states in result.get("character_states", {}).items():
+            for state_type, state_data in states.items():
+                if isinstance(state_data, dict):
+                    value = state_data.get("value", [])
+                elif isinstance(state_data, list):
+                    value = state_data
+                else:
+                    value = [state_data]
+                self.update_character_state(character_id, state_type, value, chapter)
+
+        # v5.6 新增: 处理物品状态（数量）
+        for item_id, state_data in result.get("item_states", {}).items():
+            if isinstance(state_data, dict):
+                quantity = state_data.get("quantity", 0)
+                unit = state_data.get("unit", "个")
+            else:
+                quantity = state_data
+                unit = "个"
+            self.update_item_state(item_id, quantity, chapter, unit)
+
+        # v5.6 新增: 处理时间状态
+        time_data = result.get("time_states", {})
+        if time_data:
+            current_date = time_data.get("current_date", "")
+            if current_date:
+                self.update_time_state(current_date, chapter)
 
         # 更新进度
         self.update_progress(chapter)

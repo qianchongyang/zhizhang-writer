@@ -127,6 +127,11 @@ class BatchWriter:
         print("批量写作开始")
         self.load_progress()
 
+        if self.night_mode:
+            print(f"🌙 夜间模式已启用")
+            print(f"额度上限: {self.max_calls} 次")
+            print(f"剩余额度: {self.max_calls - self.total_calls} 次")
+
         while self.current_chapter <= self.to_chapter:
             if not self.check_quota():
                 print(f"额度不足，停止批量写作")
@@ -157,6 +162,21 @@ class BatchWriter:
 
                 self.current_chapter += 1
                 self.save_progress()
+
+                # 夜间模式进度提示
+                if self.night_mode and len(self.completed_chapters) > 0:
+                    remaining = self.max_calls - self.total_calls
+                    if remaining < 50:
+                        print(f"🌙 夜间额度即将用尽（剩余{remaining}次）")
+                        print(f"将在本章后停止，以便明天继续")
+
+                    # 计算预计可用章节数
+                    avg_calls = self.total_calls / len(self.completed_chapters)
+                    estimated_chapters = remaining // avg_calls if avg_calls > 0 else 0
+                    remaining_chapters = self.to_chapter - self.current_chapter + 1
+
+                    if estimated_chapters < remaining_chapters:
+                        print(f"📊 预计可完成章节数: {int(estimated_chapters)}/{remaining_chapters}")
 
             except KeyboardInterrupt:
                 print("\n用户中断批量写作")

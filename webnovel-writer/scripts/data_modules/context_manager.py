@@ -734,6 +734,7 @@ def main():
     parser.add_argument("--template", type=str, default=ContextManager.DEFAULT_TEMPLATE)
     parser.add_argument("--no-snapshot", action="store_true")
     parser.add_argument("--max-chars", type=int, default=8000)
+    parser.add_argument("--output-file", type=str, default=None, help="输出到指定文件路径（独立输出模式）")
 
     args = parser.parse_args()
 
@@ -755,7 +756,18 @@ def main():
             save_snapshot=True,
             max_chars=args.max_chars,
         )
-        print_success(payload, message="context_built")
+
+        # 独立输出模式：写入文件
+        if args.output_file:
+            import json
+            output_path = Path(args.output_file)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(payload, f, ensure_ascii=False, indent=2)
+            print(f"Context written to {args.output_file}", file=sys.stderr)
+        else:
+            print_success(payload, message="context_built")
+
         try:
             manager.index_manager.log_tool_call("context_manager:build", True, chapter=args.chapter)
         except Exception as exc:

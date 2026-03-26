@@ -21,6 +21,7 @@
 - `reader-pull-checker`
 - `high-point-checker`
 - `pacing-checker`
+- `logic-bug-checker`（新增：杠精读者视角）
 
 ## Auto 路由判定信号
 
@@ -41,7 +42,11 @@
 - `pacing-checker`：当满足任一条件时启用
   - 章号 >= 10；
   - 最近章节存在明显节奏失衡风险；
-  - 用户显式要求“节奏审查”。
+  - 用户显式要求"节奏审查"。
+- `logic-bug-checker`：当满足任一条件时启用（新增）
+  - 关键章/高潮章（逻辑漏洞影响更大）；
+  - 正文出现能力突变、巧合、身份冲突等信号；
+  - 用户显式要求"逻辑审查"或"杠精审查"。
 
 ## Task 调用模板（示意）
 
@@ -52,6 +57,7 @@ if mode != "minimal":
   if trigger_reader_pull: selected.append("reader-pull-checker")
   if trigger_high_point: selected.append("high-point-checker")
   if trigger_pacing: selected.append("pacing-checker")
+  if trigger_logic_bug: selected.append("logic-bug-checker")
 
 parallel Task(agent, {chapter, chapter_file, project_root}) for agent in selected
 ```

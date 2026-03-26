@@ -53,3 +53,9 @@ _v52_*.json
 _v52_*.txt
 claude_inventory.csv
 *_utf8_sample.txt
+
+# Local personal notes and communication records (do NOT commit)
+docs/notes/沟通记录/
+docs/superpowers/
+docs/个人/
+docs/.private/

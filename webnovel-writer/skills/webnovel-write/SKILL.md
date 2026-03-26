@@ -298,7 +298,7 @@ review_metrics 字段约束（当前工作流约定只传以下字段）：
 ```bash
 # 合并审查结果
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
-  review merge \
+  merge \
   --group1 "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/rev1_ch${chapter_padded}.json" \
   --group2 "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/rev2_ch${chapter_padded}.json" \
   --output "${PROJECT_ROOT}/.webnovel/tmp/merged/review_merged_ch${chapter_padded}.json"

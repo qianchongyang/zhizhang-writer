@@ -183,7 +183,7 @@ CONTEXT_DATA="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PR
     {"type": "get-debt-summary"}
 ]')"
 ```
-解析结果：`echo "${CONTEXT_DATA}" | jq -r '.results[] | ...'`
+解析结果：`echo "${CONTEXT_DATA}" | jq -r '."get-recent-reading-power"'` 等
 
 ### Step 3: 实体与最近出场 + 伏笔读取
 ```bash
@@ -193,7 +193,7 @@ ENTITY_DATA="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PRO
     {"type": "recent-appearances", "limit": 20}
 ]')"
 ```
-解析结果：`echo "${ENTITY_DATA}" | jq -r '.results[] | ...'`
+解析结果：`echo "${ENTITY_DATA}" | jq -r '."get-core-entities"'` 等
 
 - 从 `state.json` 读取：
   - `progress.current_chapter`

@@ -316,7 +316,7 @@ class ContextManager:
         project_memory = project_memory_bundle.get("content") or self._load_json_optional(self._project_memory_path())
         story_memory_content = dict(story_memory_bundle.get("content") or {})
         story_memory_meta = dict(story_memory_bundle.get("meta") or {})
-        story_recall = self._build_story_recall(state, story_memory_content, story_memory_meta)
+        story_recall = self._build_story_recall(chapter, state, story_memory_content, story_memory_meta)
         core = {
             "chapter_outline": self._load_outline(chapter),
             "protagonist_snapshot": state.get("protagonist_state", {}),
@@ -852,6 +852,7 @@ class ContextManager:
 
     def _build_story_recall(
         self,
+        chapter: int,
         state: Dict[str, Any],
         story_memory: Dict[str, Any],
         story_memory_meta: Dict[str, Any],
@@ -973,10 +974,39 @@ class ContextManager:
                 }
             )
 
+        memory_presence = bool(characters or plot_threads or recent_events or change_ledger)
+        consolidation_gap = max(
+            0,
+            int(chapter or 0) - int(story_memory_meta.get("last_consolidated_chapter") or 0),
+        )
+        signal_count = len(priority_foreshadowing) + len(character_focus) + len(structured_change_focus) + len(recent_events)
+        recall_reasons: List[str] = []
+        if not memory_presence:
+            recall_mode = "off"
+            recall_reasons.append("story_memory_empty")
+        elif priority_foreshadowing or signal_count >= 3 or consolidation_gap >= 3:
+            recall_mode = "boost"
+            if priority_foreshadowing:
+                recall_reasons.append("unresolved_foreshadowing")
+            if len(structured_change_focus) > 0:
+                recall_reasons.append("recent_structured_changes")
+            if consolidation_gap >= 3:
+                recall_reasons.append("consolidation_gap")
+        else:
+            recall_mode = "normal"
+            recall_reasons.append("story_memory_available")
+
         return {
             "version": story_memory_meta.get("version", ""),
             "last_consolidated_chapter": story_memory_meta.get("last_consolidated_chapter", 0),
             "last_consolidated_at": story_memory_meta.get("last_consolidated_at", ""),
+            "recall_policy": {
+                "mode": recall_mode,
+                "should_recall_story_memory": memory_presence,
+                "reasons": recall_reasons,
+                "signal_count": signal_count,
+                "consolidation_gap": consolidation_gap,
+            },
             "priority_foreshadowing": priority_foreshadowing[:5],
             "recent_events": recent_events[-5:],
             "character_focus": character_focus[:5],

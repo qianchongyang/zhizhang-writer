@@ -47,3 +47,11 @@
 1. 必读：`writing_guidance.guidance_items`
 2. 条件必读：`rag_assist`（`invoked=true` 且 `hits` 非空）
 3. 选读：`reader_signal`、`genre_profile.reference_hints`
+4. 记忆优先：`story_recall.recall_policy`、`story_recall.priority_foreshadowing`、`story_recall.character_focus`
+
+## 记忆召回策略
+
+- `mode=boost`：优先处理未回收伏笔、最近重大事件、关键角色状态和高分结构化变化
+- `mode=normal`：只保留最相关的稳定记忆，避免信息膨胀
+- `mode=off`：当前没有有效 story_memory，可直接使用现有上下文链路
+- `consolidation_gap` 较大时，应把 story_memory 视为高优先级输入，即使当前章节不是高风险章节也要先消化

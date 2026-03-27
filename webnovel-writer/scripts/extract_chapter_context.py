@@ -384,6 +384,17 @@ def _render_text(payload: Dict[str, Any]) -> str:
         lines.append("")
         if story_recall.get("last_consolidated_chapter") is not None:
             lines.append(f"- last_consolidated_chapter: {story_recall.get('last_consolidated_chapter')}")
+        recall_policy = story_recall.get("recall_policy") or {}
+        if recall_policy:
+            lines.append(
+                f"- recall_policy: mode={recall_policy.get('mode')} "
+                f"should_recall={recall_policy.get('should_recall_story_memory')} "
+                f"signals={recall_policy.get('signal_count')} "
+                f"gap={recall_policy.get('consolidation_gap')}"
+            )
+            reasons = recall_policy.get("reasons") or []
+            if reasons:
+                lines.append(f"  - reasons: {', '.join(str(reason) for reason in reasons)}")
         priority_foreshadowing = story_recall.get("priority_foreshadowing") or []
         if priority_foreshadowing:
             lines.append("- 未回收伏笔:")

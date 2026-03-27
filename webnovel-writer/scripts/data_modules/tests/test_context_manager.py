@@ -320,6 +320,25 @@ def test_context_manager_story_recall_prioritizes_core_threads(temp_project):
     payload = manager.build_context(11, use_snapshot=False, save_snapshot=False)
     recall = payload["sections"]["story_recall"]["content"]
     assert recall["priority_foreshadowing"][0]["content"] == "核心伏笔"
+    assert recall["recall_policy"]["mode"] == "boost"
+    assert recall["recall_policy"]["should_recall_story_memory"] is True
+
+
+def test_context_manager_story_recall_policy_off_when_memory_missing(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(2, use_snapshot=False, save_snapshot=False)
+    recall = payload["sections"]["story_recall"]["content"]
+
+    assert recall["recall_policy"]["mode"] == "off"
+    assert recall["recall_policy"]["should_recall_story_memory"] is False
 
 
 def test_context_manager_applies_ranker_and_contract_meta(temp_project):

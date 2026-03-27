@@ -130,6 +130,15 @@ python "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" extract-cont
 - 必须读取：`writing_guidance.guidance_items`
 - 推荐读取：`reader_signal` 与 `genre_profile.reference_hints`
 - 条件读取：`rag_assist`（当 `invoked=true` 且 `hits` 非空时，必须提炼成可执行约束，禁止只贴检索命中）
+- 必须读取：`story_recall.recall_policy`，据此判断本章是否进入增强召回模式
+- 必须读取：`story_memory_meta.last_consolidated_chapter`，用于判断当前章与最近一次整理的距离
+- 若 `story_recall.recall_policy.mode=boost`，必须优先消化：
+  - 未回收伏笔
+  - 最近重大事件
+  - 关键角色当前状态
+  - 高分结构化变化
+- 若 `story_recall.recall_policy.mode=normal`，只保留最相关的稳定记忆，避免上下文膨胀
+- 若 `story_recall.recall_policy.mode=off`，说明当前 story_memory 无有效内容，继续使用现有上下文链路
 
 ### Step 0.6: 时间线读取（新增，必做）
 

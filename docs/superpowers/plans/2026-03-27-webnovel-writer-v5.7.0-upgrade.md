@@ -26,7 +26,7 @@
 | `references/dialogue-writing.md` | 新增 | 对话写作规范 |
 | `references/shared/core-constraints.md` | 扩展 | 引入四大核心法则 |
 | `webnovel-writer/.claude-plugin/plugin.json` | 修改 | 版本号 5.6.2 → 5.7.0 |
-| `webnovel-writer/.claude-plugin/marketplace.json` | 修改 | 版本号更新 |
+| `.claude-plugin/marketplace.json` | 修改 | 版本号更新 |
 | `README.md` | 修改 | 更新日志 |
 | `docs/CHANGELOG.md` | 修改 | 添加 v5.7.0 变更记录 |
 
@@ -614,7 +614,7 @@ purpose: 80分质量检查清单，供审查时参考
 |------|------|------|
 | ≥70 | 优秀 | 可直接交付 |
 | 60-69 | 合格 | 轻微修改后交付 |
-| 48-59 | 需修改 | 主要问题需修复 |
+| 50-59 | 需修改 | 主要问题需修复 |
 | <48 | 不合格 | 必须大改 |
 ```
 

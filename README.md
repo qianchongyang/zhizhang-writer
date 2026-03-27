@@ -118,7 +118,8 @@ model: sonnet
 
 | 版本 | 说明 |
 |------|------|
-| **v5.9.0 (当前)** | 通用记忆引擎升级：结构化变化账本、记忆分层、写前召回与健康报告 |
+| **v5.12.0 (当前)** | 通用记忆引擎 v5.12.0：归档层、健康报告、容量余量与遗忘清理 |
+| **v5.9.0** | 通用记忆引擎升级：结构化变化账本、记忆分层、写前召回与健康报告 |
 | **v5.7.0** | **字数检查系统 + 质量总分 + references 扩展**：<br/>**新增功能**：<br/>- `references/word-count-rules.md`: 字数检查规则<br/>- `references/chapter-guide.md`: 章节写作指南<br/>- `references/hook-techniques.md`: 悬念设置技巧<br/>- `references/quality-checklist.md`: 80分质量清单<br/>- `references/plot-structures.md`: 情节结构模板<br/>- `references/dialogue-writing.md`: 对话写作规范<br/>**升级功能**：<br/>- `checker-output-schema.md`: 增加总分汇总（80分制）<br/>- `core-constraints.md`: 引入四大核心法则<br/>- `webnovel-write`: 集成字数检查<br/>- `webnovel-review`: 集成字数检查和总分汇总 |
 | **v5.6.2** | **写作约束与审核增强**：<br/>**禁止具体日期**：`core-constraints.md` 新增禁止"仙历3021年三月十五日"等具体日期写法。<br/>**情节自然度检查**：`webnovel-review` 审核阶段自动检测关系跳跃、巧合过多、节奏太快，并建议触发 `/webnovel-adjust`。<br/>**铺垫章节插入**：`webnovel-adjust` 支持自动插入关系铺垫/事件铺垫章节。 |
 | **v5.6.1** | **动态大纲调整机制**：<br/>新增 `/webnovel-adjust` Skill，支持动态调整大纲（修改章节内容、插入副本、修正冲突）。<br/>**冲突检测**：时间逆流、物品凭空出现、境界矛盾、倒计时跳跃检测。 |

@@ -20,7 +20,7 @@ PROJECT_ROOT/
 ├── .webnovel/
 │   ├── state.json          # 项目状态文件
 │   └── memory/
-│       └── story_memory.json  # 跨章节故事记忆
+│       └── story_memory.json  # 跨章节故事记忆（含归档层）
 ├── 设定集/
 │   ├── 世界观.md
 │   ├── 角色模板.md

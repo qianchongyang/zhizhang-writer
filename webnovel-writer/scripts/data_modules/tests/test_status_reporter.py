@@ -112,6 +112,11 @@ def test_memory_health_section_reflects_story_memory_freshness():
                     "recent_events": [{"ch": 18, "event": "突破"}],
                     "structured_change_ledger": [{"ch": 18, "entity_id": "xiaoyan", "field": "灵石", "change_kind": "resource_change", "old_value": "100", "new_value": "150", "delta": 50}],
                     "chapter_snapshots": [],
+                    "archive": {
+                        "plot_threads": [{"content": "已归档伏笔", "status": "已回收"}],
+                        "structured_change_ledger": [{"ch": 3, "entity_id": "old", "field": "状态", "change_kind": "state_change", "memory_score": 30}],
+                        "recent_events": [{"ch": 1, "event": "旧事件"}],
+                    },
                     "meta": {},
                 },
                 ensure_ascii=False,
@@ -131,6 +136,9 @@ def test_memory_health_section_reflects_story_memory_freshness():
         assert "未回收伏笔数" in report
         assert "1" in report
         assert "结构化变化条目" in report
+        assert "已归档伏笔数" in report
+        assert "已归档变化条目" in report
+        assert "结构化变化容量余量" in report
 
 
 def test_pacing_analysis_prefers_real_coolpoint_metadata_over_estimation():

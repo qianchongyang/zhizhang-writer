@@ -147,6 +147,36 @@ def test_normalize_story_memory_adds_stable_ids_and_limits():
     assert len(normalized["characters"]["萧炎"]["milestones"]) == 10
 
 
+def test_normalize_story_memory_archives_stale_and_resolved_items():
+    raw = {
+        "version": "1",
+        "last_consolidated_chapter": 10,
+        "characters": {},
+        "plot_threads": [
+            {"content": "过期伏笔", "status": "已回收", "resolved_chapter": 5, "chapter": 1},
+            {"content": "新伏笔", "status": "active", "chapter": 9},
+        ],
+        "recent_events": [{"ch": i, "event": f"事件{i}"} for i in range(1, 55)],
+        "structured_change_ledger": [
+            {"ch": 3, "entity_id": "old", "field": "气氛", "old": "A", "new": "B", "memory_score": 40, "memory_tier": "working"},
+            {"ch": 9, "entity_id": "new", "field": "状态", "old": "B", "new": "C", "memory_score": 85, "memory_tier": "consolidated"},
+        ],
+        "chapter_snapshots": [{"chapter": i, "saved_at": "2026-03-27T10:00:00Z"} for i in range(1, 25)],
+        "meta": {},
+    }
+
+    normalized = normalize_story_memory(raw)
+    assert normalized["plot_threads"][0]["content"] == "新伏笔"
+    assert normalized["archive"]["plot_threads"][0]["content"] == "过期伏笔"
+    assert len(normalized["recent_events"]) == 50
+    assert len(normalized["archive"]["recent_events"]) == 4
+    assert len(normalized["structured_change_ledger"]) == 1
+    assert normalized["structured_change_ledger"][0]["entity_id"] == "new"
+    assert normalized["archive"]["structured_change_ledger"][0]["entity_id"] == "old"
+    assert len(normalized["chapter_snapshots"]) == 20
+    assert len(normalized["archive"]["chapter_snapshots"]) == 4
+
+
 def test_change_kind_and_significance_are_generic():
     relation_change = {
         "entity_id": "a",

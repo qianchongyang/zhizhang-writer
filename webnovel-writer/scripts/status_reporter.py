@@ -925,6 +925,16 @@ class StatusReporter:
         if not isinstance(recent_events, list):
             recent_events = []
 
+        archive = memory.get("archive", {})
+        if not isinstance(archive, dict):
+            archive = {}
+        archived_threads = archive.get("plot_threads", [])
+        if not isinstance(archived_threads, list):
+            archived_threads = []
+        archived_changes = archive.get("structured_change_ledger", [])
+        if not isinstance(archived_changes, list):
+            archived_changes = []
+
         change_ledger = memory.get("structured_change_ledger", memory.get("numeric_ledger", []))
         if not isinstance(change_ledger, list):
             change_ledger = []
@@ -953,6 +963,9 @@ class StatusReporter:
             f"- **近章事件数**: {len(recent_events)}",
             f"- **结构化变化条目**: {len(change_ledger)}",
             f"- **已沉淀变化条目**: {len(consolidated_changes)}",
+            f"- **已归档伏笔数**: {len(archived_threads)}",
+            f"- **已归档变化条目**: {len(archived_changes)}",
+            f"- **结构化变化容量余量**: {max(0, 50 - len(change_ledger))}",
         ]
 
         if issues:

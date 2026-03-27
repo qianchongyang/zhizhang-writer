@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from copy import deepcopy
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 
@@ -57,6 +58,7 @@ _STORY_MEMORY_CHARACTER_MILESTONE_LIMIT = 10
 _STORY_MEMORY_RECENT_EVENT_LIMIT = 50
 _STORY_MEMORY_CHAPTER_SNAPSHOT_LIMIT = 20
 _STORY_MEMORY_CHANGE_LEDGER_LIMIT = 50
+_STORY_MEMORY_ARCHIVE_STALE_CHAPTER_GAP = 3
 
 _CHANGE_KIND_RELATIONSHIP = "relationship_change"
 _CHANGE_KIND_LOCATION = "location_change"
@@ -533,6 +535,102 @@ def _normalize_story_memory_snapshot(item: Mapping[str, Any], index: int) -> Dic
     return normalized
 
 
+def _normalize_story_memory_archive(raw_archive: Any) -> Dict[str, List[Dict[str, Any]]]:
+    archive = {
+        "plot_threads": [],
+        "recent_events": [],
+        "structured_change_ledger": [],
+        "chapter_snapshots": [],
+    }
+    if not isinstance(raw_archive, Mapping):
+        return archive
+
+    for key in archive:
+        items = raw_archive.get(key, [])
+        if isinstance(items, list):
+            for index, item in enumerate(items):
+                if not isinstance(item, Mapping):
+                    continue
+                if key == "plot_threads":
+                    archive[key].append(_normalize_story_memory_thread(item, index))
+                elif key == "recent_events":
+                    archive[key].append(_normalize_story_memory_event(item, index))
+                elif key == "structured_change_ledger":
+                    archive[key].append(_normalize_story_memory_change_ledger(item, index))
+                elif key == "chapter_snapshots":
+                    archive[key].append(_normalize_story_memory_snapshot(item, index))
+    return archive
+
+
+def _archive_story_memory_items(
+    normalized: Dict[str, Any],
+    raw_archive: Any,
+) -> Dict[str, List[Dict[str, Any]]]:
+    archive = _normalize_story_memory_archive(raw_archive)
+    last_consolidated = int(normalized.get("last_consolidated_chapter") or 0)
+
+    def _append_archive(key: str, items: List[Dict[str, Any]]) -> None:
+        if not items:
+            return
+        archive[key].extend(deepcopy(item) for item in items if isinstance(item, dict))
+
+    active_threads = []
+    for item in normalized.get("plot_threads", []):
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status") or "").strip().lower()
+        resolved_chapter = to_positive_int(item.get("resolved_chapter"))
+        if (
+            status in {"已回收", "resolved", "done", "complete"}
+            and resolved_chapter is not None
+            and last_consolidated > 0
+            and resolved_chapter <= max(0, last_consolidated - _STORY_MEMORY_ARCHIVE_STALE_CHAPTER_GAP)
+        ):
+            archive["plot_threads"].append(deepcopy(item))
+            continue
+        active_threads.append(item)
+    normalized["plot_threads"] = active_threads
+
+    active_changes = []
+    stale_changes = []
+    for item in normalized.get("structured_change_ledger", []):
+        if not isinstance(item, dict):
+            continue
+        score = float(item.get("memory_score") or 0.0)
+        chapter = to_positive_int(item.get("ch")) or 0
+        if (
+            score < 60.0
+            and last_consolidated > 0
+            and chapter > 0
+            and chapter <= max(0, last_consolidated - _STORY_MEMORY_ARCHIVE_STALE_CHAPTER_GAP)
+        ):
+            stale_changes.append(item)
+            continue
+        active_changes.append(item)
+    if len(active_changes) > _STORY_MEMORY_CHANGE_LEDGER_LIMIT:
+        overflow = active_changes[:-_STORY_MEMORY_CHANGE_LEDGER_LIMIT]
+        stale_changes.extend(overflow)
+        active_changes = active_changes[-_STORY_MEMORY_CHANGE_LEDGER_LIMIT :]
+    normalized["structured_change_ledger"] = active_changes
+    _append_archive("structured_change_ledger", stale_changes)
+
+    active_events = list(normalized.get("recent_events", []))
+    if len(active_events) > _STORY_MEMORY_RECENT_EVENT_LIMIT:
+        overflow = active_events[:-_STORY_MEMORY_RECENT_EVENT_LIMIT]
+        _append_archive("recent_events", overflow)
+        active_events = active_events[-_STORY_MEMORY_RECENT_EVENT_LIMIT :]
+    normalized["recent_events"] = active_events
+
+    active_snapshots = list(normalized.get("chapter_snapshots", []))
+    if len(active_snapshots) > _STORY_MEMORY_CHAPTER_SNAPSHOT_LIMIT:
+        overflow = active_snapshots[:-_STORY_MEMORY_CHAPTER_SNAPSHOT_LIMIT]
+        _append_archive("chapter_snapshots", overflow)
+        active_snapshots = active_snapshots[-_STORY_MEMORY_CHAPTER_SNAPSHOT_LIMIT :]
+    normalized["chapter_snapshots"] = active_snapshots
+
+    return archive
+
+
 def normalize_story_memory(raw_story_memory: Any) -> Dict[str, Any]:
     if not isinstance(raw_story_memory, Mapping):
         raw_story_memory = {}
@@ -547,6 +645,12 @@ def normalize_story_memory(raw_story_memory: Any) -> Dict[str, Any]:
         "recent_events": [],
         "structured_change_ledger": [],
         "chapter_snapshots": [],
+        "archive": {
+            "plot_threads": [],
+            "recent_events": [],
+            "structured_change_ledger": [],
+            "chapter_snapshots": [],
+        },
         "meta": dict(raw_story_memory.get("meta") or {}),
     }
 
@@ -561,32 +665,27 @@ def normalize_story_memory(raw_story_memory: Any) -> Dict[str, Any]:
         for index, item in enumerate(plot_threads):
             if isinstance(item, Mapping):
                 normalized["plot_threads"].append(_normalize_story_memory_thread(item, index))
-        if len(normalized["plot_threads"]) > _STORY_MEMORY_RECENT_EVENT_LIMIT:
-            normalized["plot_threads"] = normalized["plot_threads"][-_STORY_MEMORY_RECENT_EVENT_LIMIT :]
 
     recent_events = raw_story_memory.get("recent_events", [])
     if isinstance(recent_events, list):
         for index, item in enumerate(recent_events):
             if isinstance(item, Mapping):
                 normalized["recent_events"].append(_normalize_story_memory_event(item, index))
-        if len(normalized["recent_events"]) > _STORY_MEMORY_RECENT_EVENT_LIMIT:
-            normalized["recent_events"] = normalized["recent_events"][-_STORY_MEMORY_RECENT_EVENT_LIMIT :]
 
     change_ledger = raw_story_memory.get("structured_change_ledger", raw_story_memory.get("numeric_ledger", []))
     if isinstance(change_ledger, list):
         for index, item in enumerate(change_ledger):
             if isinstance(item, Mapping):
                 normalized["structured_change_ledger"].append(_normalize_story_memory_change_ledger(item, index))
-        if len(normalized["structured_change_ledger"]) > _STORY_MEMORY_CHANGE_LEDGER_LIMIT:
-            normalized["structured_change_ledger"] = normalized["structured_change_ledger"][-_STORY_MEMORY_CHANGE_LEDGER_LIMIT :]
 
     chapter_snapshots = raw_story_memory.get("chapter_snapshots", [])
     if isinstance(chapter_snapshots, list):
         for index, item in enumerate(chapter_snapshots):
             if isinstance(item, Mapping):
                 normalized["chapter_snapshots"].append(_normalize_story_memory_snapshot(item, index))
-        if len(normalized["chapter_snapshots"]) > _STORY_MEMORY_CHAPTER_SNAPSHOT_LIMIT:
-            normalized["chapter_snapshots"] = normalized["chapter_snapshots"][-_STORY_MEMORY_CHAPTER_SNAPSHOT_LIMIT :]
+
+    archive = _archive_story_memory_items(normalized, raw_story_memory.get("archive"))
+    normalized["archive"] = archive
 
     return normalized
 

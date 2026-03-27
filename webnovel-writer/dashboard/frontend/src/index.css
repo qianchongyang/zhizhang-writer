@@ -154,7 +154,8 @@ body {
 
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 14px;
@@ -252,6 +253,21 @@ body {
   margin-bottom: 16px;
 }
 
+.page-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--text-sub);
+  font-weight: 600;
+}
+
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .cockpit-hero {
   margin-bottom: 16px;
   background: linear-gradient(180deg, #fffdf5 0%, #fff6dd 100%);
@@ -331,6 +347,43 @@ body {
   gap: 10px;
   margin-top: 10px;
   margin-bottom: 4px;
+}
+
+.memory-summary-card {
+  margin-bottom: 16px;
+}
+
+.memory-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.memory-summary-item {
+  min-width: 0;
+  padding: 12px;
+  border: 2px solid var(--border-main);
+  background: #fffdf5;
+  box-shadow: var(--shadow-soft);
+}
+
+.memory-details {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 2px solid var(--border-main);
+  background: #fffdf5;
+  box-shadow: var(--shadow-soft);
+}
+
+.memory-details summary {
+  cursor: pointer;
+  font-weight: 700;
+  color: var(--text-main);
+  list-style: none;
+}
+
+.memory-details summary::-webkit-details-marker {
+  display: none;
 }
 
 .strand-bar {

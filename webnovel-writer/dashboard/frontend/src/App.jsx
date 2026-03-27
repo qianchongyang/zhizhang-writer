@@ -332,7 +332,7 @@ function DashboardPage({ data, onNavigate }) {
     )
 }
 
-function MemoryRecallPage({ data }) {
+function MemoryRecallPage({ data, onNavigate }) {
     if (!data) return <div className="loading">加载中…</div>
 
     const storyRecall = data.story_recall || {}
@@ -344,32 +344,41 @@ function MemoryRecallPage({ data }) {
     return (
         <>
             <div className="page-header">
-                <h2>🧠 记忆与召回</h2>
-                <span className={`card-badge ${memoryHealth.memory_stale ? 'badge-amber' : 'badge-green'}`}>
-                    {memoryHealth.memory_stale ? '需要整理' : '稳定'}
-                </span>
+                <div>
+                    <h2>🧠 记忆与召回</h2>
+                    <p className="page-subtitle">先看摘要，必要时再展开历史与归档。</p>
+                </div>
+                <div className="page-header-actions">
+                    <span className={`card-badge ${memoryHealth.memory_stale ? 'badge-amber' : 'badge-green'}`}>
+                        {memoryHealth.memory_stale ? '需要整理' : '稳定'}
+                    </span>
+                    <button className="quick-action-btn" onClick={() => onNavigate?.('dashboard')}>回到驾驶舱</button>
+                    <button className="quick-action-btn" onClick={() => onNavigate?.('data')}>看全量数据</button>
+                </div>
             </div>
 
-            <div className="dashboard-grid">
-                <div className="card stat-card">
-                    <span className="stat-label">召回模式</span>
-                    <span className="stat-value plain">{recallPolicy.mode || 'normal'}</span>
-                    <span className="stat-sub">signals {recallPolicy.signal_count || 0} · gap {recallPolicy.consolidation_gap || 0}</span>
-                </div>
-                <div className="card stat-card">
-                    <span className="stat-label">归档可用</span>
-                    <span className="stat-value">{memoryHealth.archive_available ? '是' : '否'}</span>
-                    <span className="stat-sub">plot {memoryHealth.archive_counts?.plot_threads || 0} · event {memoryHealth.archive_counts?.recent_events || 0}</span>
-                </div>
-                <div className="card stat-card">
-                    <span className="stat-label">未回收伏笔</span>
-                    <span className="stat-value">{memoryHealth.priority_foreshadowing_count || 0}</span>
-                    <span className="stat-sub">recent events {memoryHealth.recent_events_count || 0}</span>
-                </div>
-                <div className="card stat-card">
-                    <span className="stat-label">写作评分</span>
-                    <span className="stat-value plain">{writingGuidance.checklist_score?.score ?? '—'}</span>
-                    <span className="stat-sub">completion {writingGuidance.checklist_score?.completion_rate ?? '—'}</span>
+            <div className="card dashboard-section-card memory-summary-card">
+                <div className="memory-summary-strip">
+                    <div className="memory-summary-item">
+                        <span className="stat-label">召回模式</span>
+                        <span className="stat-value plain">{recallPolicy.mode || 'normal'}</span>
+                        <span className="stat-sub">signals {recallPolicy.signal_count || 0} · gap {recallPolicy.consolidation_gap || 0}</span>
+                    </div>
+                    <div className="memory-summary-item">
+                        <span className="stat-label">归档可用</span>
+                        <span className="stat-value">{memoryHealth.archive_available ? '是' : '否'}</span>
+                        <span className="stat-sub">plot {memoryHealth.archive_counts?.plot_threads || 0} · event {memoryHealth.archive_counts?.recent_events || 0}</span>
+                    </div>
+                    <div className="memory-summary-item">
+                        <span className="stat-label">未回收伏笔</span>
+                        <span className="stat-value">{memoryHealth.priority_foreshadowing_count || 0}</span>
+                        <span className="stat-sub">recent events {memoryHealth.recent_events_count || 0}</span>
+                    </div>
+                    <div className="memory-summary-item">
+                        <span className="stat-label">写作评分</span>
+                        <span className="stat-value plain">{writingGuidance.checklist_score?.score ?? '—'}</span>
+                        <span className="stat-sub">completion {writingGuidance.checklist_score?.completion_rate ?? '—'}</span>
+                    </div>
                 </div>
             </div>
 
@@ -382,9 +391,10 @@ function MemoryRecallPage({ data }) {
                         </div>
                         <div className="entity-detail">
                             <p><strong>策略：</strong>mode={recallPolicy.mode || 'normal'} · should_recall={String(recallPolicy.should_recall_story_memory)}</p>
+                            <p><strong>提示：</strong>{Array.isArray(recallPolicy.reasons) && recallPolicy.reasons.length > 0 ? recallPolicy.reasons.slice(0, 3).join(' / ') : '当前召回按默认权重执行'}</p>
                             {Array.isArray(storyRecall.priority_foreshadowing) && storyRecall.priority_foreshadowing.length > 0 ? (
-                                <ul className="summary-list">
-                                    {storyRecall.priority_foreshadowing.slice(0, 8).map((item, index) => (
+                                <ul className="summary-list compact">
+                                    {storyRecall.priority_foreshadowing.slice(0, 5).map((item, index) => (
                                         <li key={index}>
                                             {item.name || item.content || item.event || '未命名伏笔'}
                                             {item.urgency !== undefined ? `（urgency=${item.urgency}）` : ''}
@@ -401,38 +411,36 @@ function MemoryRecallPage({ data }) {
                             <span className="card-badge badge-purple">{archiveRecall.plot_threads?.length || 0} / {archiveRecall.recent_events?.length || 0}</span>
                         </div>
                         {archiveRecall.plot_threads?.length > 0 ? (
-                            <>
-                                <div className="entity-current-block">
-                                    <strong>归档伏笔：</strong>
-                                    <ul className="summary-list">
-                                        {archiveRecall.plot_threads.slice(0, 5).map((item, index) => (
-                                            <li key={index}>{item.content || item.event || '—'}（tier={item.memory_tier || 'archive'} · score={item.archive_score ?? '—'}）</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            </>
+                            <details className="memory-details" open>
+                                <summary>归档伏笔 {archiveRecall.plot_threads.length} 条</summary>
+                                <ul className="summary-list compact">
+                                    {archiveRecall.plot_threads.slice(0, 4).map((item, index) => (
+                                        <li key={index}>{item.content || item.event || '—'}（tier={item.memory_tier || 'archive'} · score={item.archive_score ?? '—'}）</li>
+                                    ))}
+                                </ul>
+                            </details>
                         ) : <div className="empty-state compact"><p>暂无归档伏笔召回</p></div>}
 
                         {archiveRecall.recent_events?.length > 0 ? (
-                            <div className="entity-current-block">
-                                <strong>归档事件：</strong>
-                                <ul className="summary-list">
-                                    {archiveRecall.recent_events.slice(0, 5).map((item, index) => (
+                            <details className="memory-details">
+                                <summary>归档事件 {archiveRecall.recent_events.length} 条</summary>
+                                <ul className="summary-list compact">
+                                    {archiveRecall.recent_events.slice(0, 4).map((item, index) => (
                                         <li key={index}>Ch.{item.ch || item.chapter || '?'}: {item.event || '—'}（score={item.archive_score ?? '—'}）</li>
                                     ))}
                                 </ul>
-                            </div>
+                            </details>
                         ) : null}
 
                         {archiveRecall.structured_change_focus?.length > 0 ? (
-                            <div className="entity-current-block">
-                                <strong>归档变化：</strong>
-                                <ul className="summary-list">
-                                    {archiveRecall.structured_change_focus.slice(0, 5).map((item, index) => (
+                            <details className="memory-details">
+                                <summary>归档变化 {archiveRecall.structured_change_focus.length} 条</summary>
+                                <ul className="summary-list compact">
+                                    {archiveRecall.structured_change_focus.slice(0, 4).map((item, index) => (
                                         <li key={index}>{item.entity_id || '—'}.{item.field || '—'}（tier={item.memory_tier || 'archive'} · score={item.archive_score ?? '—'}）</li>
                                     ))}
                                 </ul>
-                            </div>
+                            </details>
                         ) : null}
                     </div>
                 </div>
@@ -443,7 +451,7 @@ function MemoryRecallPage({ data }) {
                             <span className="card-title">记忆健康</span>
                             <span className={`card-badge ${memoryHealth.memory_stale ? 'badge-red' : 'badge-green'}`}>{memoryHealth.status || 'unknown'}</span>
                         </div>
-                        <div className="entity-detail">
+                        <div className="entity-detail compact">
                             <p><strong>last consolidated：</strong>Ch.{memoryHealth.last_consolidated_chapter || 0}</p>
                             <p><strong>gap：</strong>{memoryHealth.consolidation_gap || 0}</p>
                             <p><strong>signals：</strong>{memoryHealth.signal_count || 0}</p>
@@ -458,11 +466,15 @@ function MemoryRecallPage({ data }) {
                             <span className="card-title">写作建议</span>
                             <span className="card-badge badge-cyan">{writingGuidance.checklist?.length || 0} 项</span>
                         </div>
-                        {Array.isArray(writingGuidance.guidance_items) && writingGuidance.guidance_items.length > 0 ? (
-                            <ul className="summary-list compact">
-                                {writingGuidance.guidance_items.slice(0, 6).map((item, index) => <li key={index}>{item}</li>)}
-                            </ul>
-                        ) : <div className="empty-state compact"><p>暂无写作建议</p></div>}
+                        <p className="entity-desc">{Array.isArray(writingGuidance.guidance_items) && writingGuidance.guidance_items.length > 0 ? writingGuidance.guidance_items[0] : '暂无写作建议'}</p>
+                        {Array.isArray(writingGuidance.guidance_items) && writingGuidance.guidance_items.length > 1 ? (
+                            <details className="memory-details">
+                                <summary>展开更多建议 {Math.min(writingGuidance.guidance_items.length - 1, 5)} 条</summary>
+                                <ul className="summary-list compact">
+                                    {writingGuidance.guidance_items.slice(1, 6).map((item, index) => <li key={index}>{item}</li>)}
+                                </ul>
+                            </details>
+                        ) : null}
                     </div>
                 </div>
             </div>

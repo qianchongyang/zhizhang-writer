@@ -119,7 +119,8 @@ model: sonnet
 
 | 版本 | 说明 |
 |------|------|
-| **v5.13.1 (当前)** | Dashboard 写作驾驶舱重构：首页聚焦本章决策、记忆与召回页、聚合 summary 接口 |
+| **v5.13.2 (当前)** | Dashboard 记忆与召回页压缩：首页驾驶舱与记忆页都改成快速扫视图 |
+| **v5.13.1** | Dashboard 写作驾驶舱重构：首页聚焦本章决策、记忆与召回页、聚合 summary 接口 |
 | **v5.12.0** | 通用记忆引擎 v5.12.0：归档层、健康报告、容量余量与遗忘清理 |
 | **v5.9.0** | 通用记忆引擎升级：结构化变化账本、记忆分层、写前召回与健康报告 |
 | **v5.7.0** | **字数检查系统 + 质量总分 + references 扩展**：<br/>**新增功能**：<br/>- `references/word-count-rules.md`: 字数检查规则<br/>- `references/chapter-guide.md`: 章节写作指南<br/>- `references/hook-techniques.md`: 悬念设置技巧<br/>- `references/quality-checklist.md`: 80分质量清单<br/>- `references/plot-structures.md`: 情节结构模板<br/>- `references/dialogue-writing.md`: 对话写作规范<br/>**升级功能**：<br/>- `checker-output-schema.md`: 增加总分汇总（80分制）<br/>- `core-constraints.md`: 引入四大核心法则<br/>- `webnovel-write`: 集成字数检查<br/>- `webnovel-review`: 集成字数检查和总分汇总 |

@@ -16,6 +16,7 @@ from data_modules.state_validator import (
     normalize_foreshadowing_tier,
     infer_change_kind,
     normalize_story_memory,
+    memory_tier_rank,
     score_change_significance,
     normalize_state_runtime_sections,
     resolve_chapter_field,
@@ -179,3 +180,8 @@ def test_change_kind_and_significance_are_generic():
     assert relation_score["memory_tier"] in {"episodic", "consolidated"}
     assert relation_score["memory_score"] > generic_score["memory_score"]
     assert generic_score["should_consolidate"] is False
+
+
+def test_memory_tier_rank_orders_consolidated_first():
+    assert memory_tier_rank("consolidated") < memory_tier_rank("episodic") < memory_tier_rank("working")
+    assert memory_tier_rank("unknown") == memory_tier_rank("working")

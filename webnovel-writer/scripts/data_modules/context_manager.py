@@ -35,7 +35,7 @@ from .genre_profile_builder import (
     extract_markdown_refs,
     parse_genre_tokens,
 )
-from .state_validator import normalize_story_memory, normalize_foreshadowing_tier
+from .state_validator import memory_tier_rank, normalize_story_memory, normalize_foreshadowing_tier
 from .writing_guidance_builder import (
     build_methodology_guidance_items,
     build_methodology_strategy_card,
@@ -945,34 +945,43 @@ class ContextManager:
 
         structured_change_focus: List[Dict[str, Any]] = []
         change_rows = [item for item in change_ledger if isinstance(item, dict)]
-        change_rows.sort(
-            key=lambda item: (
-                -float(item.get("memory_score") or 0.0),
-                -abs(float(item.get("delta") or 0.0)),
-                -int(item.get("ch") or 0),
-                str(item.get("entity_id") or ""),
-                str(item.get("field") or ""),
+        tier_buckets: Dict[str, List[Dict[str, Any]]] = {"consolidated": [], "episodic": [], "working": []}
+        for item in change_rows:
+            tier = str(item.get("memory_tier") or "working").strip().lower()
+            if tier not in tier_buckets:
+                tier = "working"
+            tier_buckets[tier].append(item)
+
+        for tier_name in ("consolidated", "episodic", "working"):
+            bucket = tier_buckets.get(tier_name, [])
+            bucket.sort(
+                key=lambda item: (
+                    memory_tier_rank(item.get("memory_tier")),
+                    -float(item.get("memory_score") or 0.0),
+                    -abs(float(item.get("delta") or 0.0)),
+                    -int(item.get("ch") or 0),
+                    str(item.get("entity_id") or ""),
+                    str(item.get("field") or ""),
+                )
             )
-        )
-        for item in change_rows[:5]:
-            score = float(item.get("memory_score") or 0.0)
-            if score < 60.0:
-                continue
-            structured_change_focus.append(
-                {
-                    "ch": item.get("ch", 0),
-                    "entity_id": item.get("entity_id", ""),
-                    "field": item.get("field", ""),
-                    "change_kind": item.get("change_kind") or item.get("type") or "state_change",
-                    "memory_score": score,
-                    "memory_tier": item.get("memory_tier") or "working",
-                    "old_value": item.get("old_value"),
-                    "new_value": item.get("new_value"),
-                    "old_numeric": item.get("old_numeric"),
-                    "new_numeric": item.get("new_numeric"),
-                    "delta": item.get("delta"),
-                }
-            )
+            tier_limit = {"consolidated": 2, "episodic": 2, "working": 1}.get(tier_name, 1)
+            for item in bucket[:tier_limit]:
+                score = float(item.get("memory_score") or 0.0)
+                structured_change_focus.append(
+                    {
+                        "ch": item.get("ch", 0),
+                        "entity_id": item.get("entity_id", ""),
+                        "field": item.get("field", ""),
+                        "change_kind": item.get("change_kind") or item.get("type") or "state_change",
+                        "memory_score": score,
+                        "memory_tier": item.get("memory_tier") or "working",
+                        "old_value": item.get("old_value"),
+                        "new_value": item.get("new_value"),
+                        "old_numeric": item.get("old_numeric"),
+                        "new_numeric": item.get("new_numeric"),
+                        "delta": item.get("delta"),
+                    }
+                )
 
         memory_presence = bool(characters or plot_threads or recent_events or change_ledger)
         consolidation_gap = max(
@@ -1006,6 +1015,11 @@ class ContextManager:
                 "reasons": recall_reasons,
                 "signal_count": signal_count,
                 "consolidation_gap": consolidation_gap,
+                "tier_counts": {
+                    "consolidated": len(tier_buckets["consolidated"]),
+                    "episodic": len(tier_buckets["episodic"]),
+                    "working": len(tier_buckets["working"]),
+                },
             },
             "priority_foreshadowing": priority_foreshadowing[:5],
             "recent_events": recent_events[-5:],

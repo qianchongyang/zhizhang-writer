@@ -68,6 +68,12 @@ _CHANGE_KIND_ATTRIBUTE = "attribute_change"
 _CHANGE_KIND_EVENT = "event_change"
 _CHANGE_KIND_STATE = "state_change"
 
+_MEMORY_TIER_ORDER = {
+    "consolidated": 0,
+    "episodic": 1,
+    "working": 2,
+}
+
 _RELATIONSHIP_KEYWORDS = ("关系", "relation", "师徒", "盟", "敌", "仇", "友", "爱", "亲", "同伴", "同盟")
 _LOCATION_KEYWORDS = ("地点", "位置", "location", "驻地", "住所", "居所", "城市", "村", "城", "房", "屋", "区域")
 _TIMELINE_KEYWORDS = (
@@ -438,6 +444,11 @@ def score_change_significance(change: Mapping[str, Any]) -> Dict[str, Any]:
         "should_consolidate": score >= 60,
         "reasons": reasons,
     }
+
+
+def memory_tier_rank(raw_tier: Any) -> int:
+    tier = str(raw_tier or "working").strip().lower()
+    return _MEMORY_TIER_ORDER.get(tier, _MEMORY_TIER_ORDER["working"])
 
 
 def _normalize_story_memory_change_ledger(item: Mapping[str, Any], index: int) -> Dict[str, Any]:

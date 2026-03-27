@@ -341,6 +341,74 @@ def test_context_manager_story_recall_policy_off_when_memory_missing(temp_projec
     assert recall["recall_policy"]["should_recall_story_memory"] is False
 
 
+def test_context_manager_story_recall_orders_change_focus_by_tier(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 10,
+                "last_consolidated_at": "2026-03-27T10:00:00Z",
+                "characters": {},
+                "plot_threads": [],
+                "recent_events": [],
+                "structured_change_ledger": [
+                    {
+                        "ch": 10,
+                        "entity_id": "a",
+                        "field": "关系",
+                        "change_kind": "relationship_change",
+                        "old_value": "陌生",
+                        "new_value": "结盟",
+                        "memory_score": 85,
+                        "memory_tier": "consolidated",
+                    },
+                    {
+                        "ch": 11,
+                        "entity_id": "b",
+                        "field": "事件",
+                        "change_kind": "event_change",
+                        "old_value": "发生前",
+                        "new_value": "发生后",
+                        "memory_score": 60,
+                        "memory_tier": "episodic",
+                    },
+                    {
+                        "ch": 12,
+                        "entity_id": "c",
+                        "field": "状态",
+                        "change_kind": "state_change",
+                        "old_value": "普通",
+                        "new_value": "普通",
+                        "memory_score": 50,
+                        "memory_tier": "working",
+                    },
+                ],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(13, use_snapshot=False, save_snapshot=False)
+    recall = payload["sections"]["story_recall"]["content"]
+    change_focus = recall["structured_change_focus"]
+
+    assert [row["memory_tier"] for row in change_focus] == ["consolidated", "episodic", "working"]
+    assert recall["recall_policy"]["tier_counts"]["consolidated"] == 1
+    assert recall["recall_policy"]["tier_counts"]["episodic"] == 1
+    assert recall["recall_policy"]["tier_counts"]["working"] == 1
+
+
 def test_context_manager_applies_ranker_and_contract_meta(temp_project):
     state = {
         "protagonist_state": {"name": "萧炎"},

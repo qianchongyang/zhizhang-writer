@@ -42,6 +42,16 @@ model: inherit
 
 ```json
 {
+  "observer_output": {
+    "facts": [
+      {"kind": "emotion", "entity_id": "xiaoyan", "field": "emotion", "value": "压抑"}
+    ]
+  },
+  "reflector_delta": {
+    "state_changes": [
+      {"entity_id": "xiaoyan", "field": "emotion", "old": "平静", "new": "压抑", "reason": "师门冲突"}
+    ]
+  },
   "entities_appeared": [
     {"id": "xiaoyan", "type": "角色", "mentions": ["萧炎", "他"], "confidence": 0.95}
   ],
@@ -73,9 +83,30 @@ model: inherit
   "time_states": {
     "current_date": "3021年三月初五",
     "countdown": {"event": "宗门大比", "days_remaining": 26}
-  }
+  },
+  "emotional_arcs": [
+    {
+      "character_id": "萧炎",
+      "emotional_state": "压抑",
+      "emotional_trend": "down",
+      "trigger_event": "师门冲突",
+      "confidence": 0.86
+    }
+  ],
+  "style_fatigue": [
+    {
+      "issue_type": "repetition",
+      "example": "他深吸一口气，又深吸一口气。",
+      "suggestion": "合并重复动作，改成具体反应。"
+    }
+  ]
 }
 ```
+
+新增约束：
+- `observer_output` 只允许输出正文事实，不允许直接改状态。
+- `reflector_delta` 只允许输出结构化 delta，由 `state_validator` 校验后再入库。
+- 若 `observer_output` 与 `reflector_delta` 冲突，优先保留可回溯事实，并在 `warnings` 中显式标记。
 
 ## 执行流程
 

@@ -33,6 +33,8 @@ def test_workflow_lifecycle_and_trace(tmp_path, monkeypatch):
     assert state["current_task"] is None
     assert state["history"][-1]["status"] == module.TASK_STATUS_COMPLETED
     assert state["last_stable_state"]["artifacts"]["review_completed"] is True
+    assert state["last_stable_state"]["workflow_trace"]["status"] == module.TASK_STATUS_COMPLETED
+    assert state["history"][-1]["workflow_trace"]["stage"] == "task_completed"
 
     trace_path = module.get_call_trace_path()
     assert trace_path.exists()
@@ -59,6 +61,7 @@ def test_start_task_reentry_increments_retry(tmp_path, monkeypatch):
     assert task is not None
     assert task["status"] == module.TASK_STATUS_RUNNING
     assert int(task.get("retry_count", 0)) >= 1
+    assert task["workflow_trace"]["status"] == module.TASK_STATUS_RUNNING
 
 
 def test_complete_step_rejects_mismatch_step_id(tmp_path, monkeypatch):
@@ -91,6 +94,10 @@ def test_workflow_step_owner_and_order_violation_trace(tmp_path, monkeypatch):
 
     module.start_task("webnovel-write", {"chapter_num": 12})
     module.start_step("Step 3", "Review")
+
+    state = module.load_state()
+    assert state["current_task"]["workflow_trace"]["stage"] == "Step 3"
+    assert state["current_task"]["workflow_trace"]["status"] == module.STEP_STATUS_RUNNING
 
     trace_path = module.get_call_trace_path()
     lines = [json.loads(line) for line in trace_path.read_text(encoding="utf-8").splitlines() if line.strip()]
@@ -144,6 +151,7 @@ def test_workflow_reentry_does_not_duplicate_history(tmp_path, monkeypatch):
 
     task = state.get("current_task") or {}
     assert int(task.get("retry_count", 0)) >= 2
+    assert task.get("workflow_trace", {}).get("status") == module.TASK_STATUS_RUNNING
 
 
 def test_cleanup_artifacts_requires_confirm(tmp_path, monkeypatch):

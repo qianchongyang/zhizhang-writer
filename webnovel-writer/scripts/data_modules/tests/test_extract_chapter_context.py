@@ -144,6 +144,16 @@ def test_build_chapter_context_payload_includes_contract_sections(tmp_path):
                 "last_consolidated_chapter": 2,
                 "last_consolidated_at": "2026-03-27T10:00:00Z",
                 "characters": {"主角": {"current_state": "闭关", "last_update_chapter": 2}},
+                "emotional_arcs": {
+                    "主角": [
+                        {
+                            "chapter": 2,
+                            "emotional_state": "压抑",
+                            "emotional_trend": "down",
+                            "trigger_event": "旧伤复发",
+                        }
+                    ]
+                },
                 "plot_threads": [{"name": "玄铁令", "status": "pending", "urgency": 88}],
                 "recent_events": [{"ch": 2, "event": "突破"}],
                 "chapter_snapshots": [],
@@ -162,6 +172,18 @@ def test_build_chapter_context_payload_includes_contract_sections(tmp_path):
     refs_dir.mkdir(parents=True, exist_ok=True)
     (refs_dir / "genre-profiles.md").write_text("## xuanhuan\n- 升级线清晰", encoding="utf-8")
     (refs_dir / "reading-power-taxonomy.md").write_text("## xuanhuan\n- 悬念钩优先", encoding="utf-8")
+    cfg.current_focus_file.write_text(
+        json.dumps(
+            {
+                "title": "回收旧线索",
+                "goal": "本章必须拉回玄铁令",
+                "must_resolve": ["确认玄铁令来历"],
+                "hard_constraints": ["禁止扩写新支线"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
     idx = IndexManager(cfg)
     idx.save_chapter_reading_power(
@@ -172,10 +194,13 @@ def test_build_chapter_context_payload_includes_contract_sections(tmp_path):
     )
 
     payload = build_chapter_context_payload(tmp_path, 3)
-    assert payload["context_contract_version"] == "v2"
+    assert payload["context_contract_version"] == "v3"
     assert payload.get("context_weight_stage") in {"early", "mid", "late"}
     assert payload["memory"]["project_memory"]["patterns"][0]["description"] == "危机钩"
     assert payload["story_recall"]["priority_foreshadowing"][0]["name"] == "玄铁令"
+    assert payload["story_recall"]["emotional_focus"][0]["emotional_state"] == "压抑"
+    assert payload["chapter_intent"]["focus_title"] == "回收旧线索"
+    assert "确认玄铁令来历" in payload["chapter_intent"]["must_resolve"]
     assert "writing_guidance" in payload
     assert isinstance(payload["writing_guidance"].get("guidance_items"), list)
     assert isinstance(payload["writing_guidance"].get("checklist"), list)
@@ -195,17 +220,38 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
 
     payload = {
         "chapter": 10,
-        "outline": "测试大纲",
+        "outline": "旧玉佩线索重现，大纲要求追查来历。",
         "previous_summaries": ["### 第9章摘要\n上一章"],
         "state_summary": "状态",
-        "context_contract_version": "v2",
+        "context_contract_version": "v3",
         "context_weight_stage": "early",
+        "chapter_intent": {
+            "focus_title": "拉回主线",
+            "chapter_goal": "追查旧玉佩来历并回收旧债",
+            "must_resolve": ["确认旧玉佩来源"],
+            "story_risks": ["若拖延回收，主线张力会继续分散"],
+            "hard_constraints": ["不要引入新组织"],
+            "priority_memory": ["玄铁令伏笔"],
+        },
         "story_recall": {
             "last_consolidated_chapter": 9,
+            "recall_policy": {
+                "mode": "boost",
+                "should_recall_story_memory": True,
+                "signal_count": 5,
+                "consolidation_gap": 4,
+                "reasons": ["archive_needed"],
+            },
             "priority_foreshadowing": [{"name": "玄铁令", "urgency": 88}],
             "recent_events": [{"ch": 9, "event": "突破"}],
             "character_focus": [{"name": "萧炎", "current_state": "斗王", "last_update_chapter": 9}],
+            "emotional_focus": [{"name": "萧炎", "emotional_state": "压抑", "trigger_event": "旧伤复发"}],
             "structured_change_focus": [{"ch": 9, "entity_id": "xiaoyan", "field": "灵石", "change_kind": "resource_change", "old_value": "100", "new_value": "150", "delta": 50}],
+            "archive_recall": {
+                "plot_threads": [{"content": "旧玉佩来历", "memory_tier": "archive", "archive_score": 3}],
+                "recent_events": [{"ch": 5, "event": "找到旧玉佩"}],
+                "structured_change_focus": [{"ch": 5, "entity_id": "yupei", "field": "来历", "memory_tier": "archive", "archive_score": 2}],
+            },
         },
         "reader_signal": {"review_trend": {"overall_avg": 72}, "low_score_ranges": [{"start_chapter": 8, "end_chapter": 9}]},
         "genre_profile": {
@@ -248,12 +294,18 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
     }
 
     text = _render_text(payload)
+    assert "## 本章任务书" in text
+    assert "追查旧玉佩来历并回收旧债" in text
     assert "## 高优先级召回" in text
     assert "玄铁令" in text
+    assert "- 归档召回:" in text
+    assert "- 情绪弧线:" in text
+    assert "萧炎: 压抑 / stable（触发: 旧伤复发" in text
+    assert "旧玉佩来历" in text
     assert "结构化变化账本" in text
     assert "## 写作执行建议" in text
     assert "先修低分" in text
-    assert "## Contract (v2)" in text
+    assert "## Contract (v3)" in text
     assert "- 上下文阶段权重: early" in text
     assert "### 执行检查清单（可评分）" in text
     assert "- 总权重: 1.40" in text

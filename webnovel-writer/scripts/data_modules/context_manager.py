@@ -55,6 +55,7 @@ class ContextManager:
     EXTRA_SECTIONS = {
         "story_skeleton",
         "story_recall",
+        "chapter_intent",
         "memory",
         "preferences",
         "alerts",
@@ -69,6 +70,7 @@ class ContextManager:
         "reader_signal",
         "genre_profile",
         "writing_guidance",
+        "chapter_intent",
         "story_skeleton",
         "story_recall",
         "memory",
@@ -88,6 +90,15 @@ class ContextManager:
 
     def _project_memory_path(self) -> Path:
         return self.config.webnovel_dir / "project_memory.json"
+
+    def _author_intent_path(self) -> Path:
+        return self.config.author_intent_file
+
+    def _current_focus_path(self) -> Path:
+        return self.config.current_focus_file
+
+    def _chapter_intent_path(self, chapter: int) -> Path:
+        return self.config.chapter_intent_dir / f"chapter-{int(chapter):04d}.json"
 
     def _file_mtime_ns(self, path: Path) -> int:
         try:
@@ -136,6 +147,15 @@ class ContextManager:
             "content": raw,
             "meta": {"mtime_ns": self._file_mtime_ns(path)},
         }
+
+    def _load_control_object(self, path: Path) -> Dict[str, Any]:
+        if not path.exists():
+            return {}
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {}
+        return dict(raw) if isinstance(raw, dict) else {}
 
     def _context_dependency_meta(
         self,
@@ -316,9 +336,12 @@ class ContextManager:
         project_memory = project_memory_bundle.get("content") or self._load_json_optional(self._project_memory_path())
         story_memory_content = dict(story_memory_bundle.get("content") or {})
         story_memory_meta = dict(story_memory_bundle.get("meta") or {})
-        story_recall = self._build_story_recall(chapter, state, story_memory_content, story_memory_meta)
+        chapter_outline = self._load_outline(chapter)
+        author_intent = self._load_control_object(self._author_intent_path())
+        current_focus = self._load_control_object(self._current_focus_path())
+        story_recall = self._build_story_recall(chapter, chapter_outline, state, story_memory_content, story_memory_meta)
         core = {
-            "chapter_outline": self._load_outline(chapter),
+            "chapter_outline": chapter_outline,
             "protagonist_snapshot": state.get("protagonist_state", {}),
             "recent_summaries": self._load_recent_summaries(
                 chapter,
@@ -353,12 +376,24 @@ class ContextManager:
             "project_memory_meta": dict(project_memory_bundle.get("meta") or {}),
             "story_memory": story_memory_content,
             "story_memory_meta": story_memory_meta,
+            "author_intent": author_intent,
+            "current_focus": current_focus,
         }
         story_skeleton = self._load_story_skeleton(chapter)
         alert_slice = max(0, int(self.config.context_alerts_slice))
         reader_signal = self._load_reader_signal(chapter)
         genre_profile = self._load_genre_profile(state)
         writing_guidance = self._build_writing_guidance(chapter, reader_signal, genre_profile)
+        chapter_intent = self._build_chapter_intent(
+            chapter=chapter,
+            chapter_outline=chapter_outline,
+            story_recall=story_recall,
+            state=state,
+            story_memory=story_memory_content,
+            author_intent=author_intent,
+            current_focus=current_focus,
+            writing_guidance=writing_guidance,
+        )
 
         return {
             "meta": {"chapter": chapter},
@@ -368,6 +403,7 @@ class ContextManager:
             "reader_signal": reader_signal,
             "genre_profile": genre_profile,
             "writing_guidance": writing_guidance,
+            "chapter_intent": chapter_intent,
             "story_skeleton": story_skeleton,
             "story_recall": story_recall,
             "preferences": preferences,
@@ -554,6 +590,120 @@ class ContextManager:
                 "methodology_enabled": bool(methodology_strategy.get("enabled")),
             },
         }
+
+    def _clean_outline_goal(self, chapter_outline: str) -> str:
+        text = re.sub(r"\s+", " ", str(chapter_outline or "")).strip()
+        text = re.sub(r"^#+\s*", "", text)
+        return text[:120].strip()
+
+    def _build_chapter_intent(
+        self,
+        chapter: int,
+        chapter_outline: str,
+        story_recall: Dict[str, Any],
+        state: Dict[str, Any],
+        story_memory: Dict[str, Any],
+        author_intent: Dict[str, Any],
+        current_focus: Dict[str, Any],
+        writing_guidance: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        max_items = max(1, int(getattr(self.config, "context_chapter_intent_max_items", 3) or 3))
+        chapter_goal = str(current_focus.get("chapter_goal") or current_focus.get("goal") or "").strip()
+        if not chapter_goal:
+            chapter_goal = self._clean_outline_goal(chapter_outline) or "围绕当前大纲推进本章核心冲突"
+
+        must_resolve: List[str] = []
+        for item in current_focus.get("must_resolve", []) or []:
+            text = str(item).strip()
+            if text:
+                must_resolve.append(text)
+        if not must_resolve:
+            for item in (story_recall.get("priority_foreshadowing") or [])[:max_items]:
+                if not isinstance(item, dict):
+                    continue
+                label = str(item.get("name") or item.get("content") or item.get("event") or "").strip()
+                if label:
+                    must_resolve.append(label)
+
+        priority_memory: List[Dict[str, Any]] = []
+        for item in (story_recall.get("character_focus") or [])[:2]:
+            if isinstance(item, dict):
+                priority_memory.append(
+                    {
+                        "type": "character",
+                        "label": str(item.get("name") or "未命名角色"),
+                        "detail": str(item.get("current_state") or ""),
+                    }
+                )
+        for item in (story_recall.get("recent_events") or [])[:1]:
+            if isinstance(item, dict):
+                priority_memory.append(
+                    {
+                        "type": "event",
+                        "label": f"Ch.{item.get('ch') or item.get('chapter') or '?'}",
+                        "detail": str(item.get("event") or item.get("content") or ""),
+                    }
+                )
+        for item in (story_recall.get("structured_change_focus") or [])[:1]:
+            if isinstance(item, dict):
+                priority_memory.append(
+                    {
+                        "type": "change",
+                        "label": f"{item.get('entity_id') or '—'}.{item.get('field') or '—'}",
+                        "detail": f"{item.get('old_value')} -> {item.get('new_value')}",
+                    }
+                )
+
+        story_risks: List[str] = []
+        recall_policy = story_recall.get("recall_policy") or {}
+        consolidation_gap = int(recall_policy.get("consolidation_gap") or 0)
+        if consolidation_gap >= 3:
+            story_risks.append(f"记忆整理滞后 {consolidation_gap} 章，易遗漏跨章细节")
+        if len(story_recall.get("priority_foreshadowing") or []) >= max_items:
+            story_risks.append("高优先级伏笔较多，本章若不回收会继续堆积")
+
+        protagonist_name = str(((state.get("protagonist_state") or {}).get("name")) or "").strip()
+        emotional_arcs = story_memory.get("emotional_arcs") or {}
+        if protagonist_name and isinstance(emotional_arcs, dict):
+            protagonist_arcs = emotional_arcs.get(protagonist_name) or []
+            if isinstance(protagonist_arcs, list) and protagonist_arcs:
+                last_arc = protagonist_arcs[-1]
+                stale_gap = max(0, chapter - int(last_arc.get("chapter") or 0))
+                if stale_gap >= int(getattr(self.config, "context_emotional_arc_stale_gap", 6) or 6):
+                    story_risks.append(f"{protagonist_name} 的情绪弧线已 {stale_gap} 章未更新")
+
+        for item in (writing_guidance.get("guidance_items") or [])[:2]:
+            text = str(item).strip()
+            if text and text not in story_risks:
+                story_risks.append(text)
+
+        hard_constraints: List[str] = []
+        for source in (author_intent, current_focus):
+            if not isinstance(source, dict):
+                continue
+            for item in source.get("hard_constraints", []) or []:
+                text = str(item).strip()
+                if text and text not in hard_constraints:
+                    hard_constraints.append(text)
+
+        intent = {
+            "chapter": chapter,
+            "focus_title": str(current_focus.get("title") or current_focus.get("focus") or "").strip(),
+            "chapter_goal": chapter_goal,
+            "must_resolve": must_resolve[:max_items],
+            "priority_memory": priority_memory[: max_items + 1],
+            "story_risks": story_risks[:max_items],
+            "hard_constraints": hard_constraints[:max_items],
+        }
+        try:
+            self.config.ensure_dirs()
+            self._chapter_intent_path(chapter).write_text(
+                json.dumps(intent, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            logger.warning("failed to persist chapter intent for chapter %s", chapter)
+        return intent
 
     def _compute_writing_checklist_score(
         self,
@@ -853,6 +1003,7 @@ class ContextManager:
     def _build_story_recall(
         self,
         chapter: int,
+        chapter_outline: str,
         state: Dict[str, Any],
         story_memory: Dict[str, Any],
         story_memory_meta: Dict[str, Any],
@@ -874,10 +1025,26 @@ class ContextManager:
         recent_events = story_memory.get("recent_events", [])
         if not isinstance(recent_events, list):
             recent_events = []
+        emotional_arcs = story_memory.get("emotional_arcs", {})
+        if not isinstance(emotional_arcs, dict):
+            emotional_arcs = {}
 
         change_ledger = story_memory.get("structured_change_ledger", story_memory.get("numeric_ledger", []))
         if not isinstance(change_ledger, list):
             change_ledger = []
+
+        archive = story_memory.get("archive", {})
+        if not isinstance(archive, dict):
+            archive = {}
+        archived_threads = archive.get("plot_threads", [])
+        if not isinstance(archived_threads, list):
+            archived_threads = []
+        archived_events = archive.get("recent_events", [])
+        if not isinstance(archived_events, list):
+            archived_events = []
+        archived_changes = archive.get("structured_change_ledger", [])
+        if not isinstance(archived_changes, list):
+            archived_changes = []
 
         protagonist_name = ""
         protagonist_state = state.get("protagonist_state", {}) if isinstance(state, dict) else {}
@@ -943,6 +1110,29 @@ class ContextManager:
                 }
             )
 
+        emotional_focus: List[Dict[str, Any]] = []
+        seen_emotion_names: set[str] = set()
+        for name in [protagonist_name] + [str(item.get("name") or "") for item in character_focus]:
+            if not name or name in seen_emotion_names:
+                continue
+            rows = emotional_arcs.get(name) or []
+            if not isinstance(rows, list) or not rows:
+                continue
+            latest_arc = rows[-1]
+            if not isinstance(latest_arc, dict):
+                continue
+            seen_emotion_names.add(name)
+            emotional_focus.append(
+                {
+                    "name": name,
+                    "emotional_state": latest_arc.get("emotional_state", ""),
+                    "emotional_trend": latest_arc.get("emotional_trend", "stable"),
+                    "trigger_event": latest_arc.get("trigger_event", ""),
+                    "chapter": latest_arc.get("chapter", 0),
+                    "confidence": latest_arc.get("confidence", 1.0),
+                }
+            )
+
         structured_change_focus: List[Dict[str, Any]] = []
         change_rows = [item for item in change_ledger if isinstance(item, dict)]
         tier_buckets: Dict[str, List[Dict[str, Any]]] = {"consolidated": [], "episodic": [], "working": []}
@@ -983,12 +1173,13 @@ class ContextManager:
                     }
                 )
 
-        memory_presence = bool(characters or plot_threads or recent_events or change_ledger)
+        archive_presence = bool(archived_threads or archived_events or archived_changes)
+        memory_presence = bool(characters or plot_threads or recent_events or change_ledger or archive_presence)
         consolidation_gap = max(
             0,
             int(chapter or 0) - int(story_memory_meta.get("last_consolidated_chapter") or 0),
         )
-        signal_count = len(priority_foreshadowing) + len(character_focus) + len(structured_change_focus) + len(recent_events)
+        signal_count = len(priority_foreshadowing) + len(character_focus) + len(structured_change_focus) + len(recent_events) + len(emotional_focus)
         recall_reasons: List[str] = []
         if not memory_presence:
             recall_mode = "off"
@@ -999,11 +1190,174 @@ class ContextManager:
                 recall_reasons.append("unresolved_foreshadowing")
             if len(structured_change_focus) > 0:
                 recall_reasons.append("recent_structured_changes")
+            if archive_presence:
+                recall_reasons.append("archived_memory_available")
             if consolidation_gap >= 3:
                 recall_reasons.append("consolidation_gap")
         else:
             recall_mode = "normal"
             recall_reasons.append("story_memory_available")
+
+        chapter_outline_text = str(chapter_outline or "")
+        def _text_fragments(text: str, min_size: int = 2, max_size: int = 4, max_fragments: int = 120) -> set[str]:
+            cleaned = re.sub(r"\s+", "", str(text or ""))
+            fragments: set[str] = set()
+            if not cleaned:
+                return fragments
+            upper = min(max_size, len(cleaned))
+            for size in range(min_size, upper + 1):
+                for index in range(0, len(cleaned) - size + 1):
+                    fragment = cleaned[index : index + size].strip()
+                    if fragment:
+                        fragments.add(fragment)
+                        if len(fragments) >= max_fragments:
+                            return fragments
+            return fragments
+
+        outline_fragments = _text_fragments(chapter_outline_text)
+        active_token_sources = [protagonist_name]
+        active_token_sources.extend(
+            str(row.get("name") or row.get("content") or row.get("event") or "")
+            for row in priority_foreshadowing[:5]
+            if isinstance(row, dict)
+        )
+        active_token_sources.extend(
+            str(row.get("name") or row.get("current_state") or "")
+            for row in character_focus[:5]
+            if isinstance(row, dict)
+        )
+        active_token_sources.extend(
+            str(row.get("event") or row.get("content") or "")
+            for row in recent_events[-5:]
+            if isinstance(row, dict)
+        )
+        active_token_sources.extend(
+            f"{row.get('entity_id')}.{row.get('field')}"
+            for row in structured_change_focus[:5]
+            if isinstance(row, dict)
+        )
+        reference_fragments = set(outline_fragments)
+        reference_fragments.update(
+            fragment
+            for source in active_token_sources
+            for fragment in _text_fragments(str(source))
+            if fragment
+        )
+
+        def _archive_score(text: str) -> int:
+            if not text:
+                return 0
+            score = 0
+            text_value = str(text)
+            text_fragments = _text_fragments(text_value)
+            overlap = reference_fragments.intersection(text_fragments)
+            if overlap:
+                score += min(4, len(overlap))
+            if chapter_outline_text and text_value in chapter_outline_text:
+                score += 2
+            if protagonist_name and protagonist_name in text_value:
+                score += 2
+            return score
+
+        def _archive_signature(item: Dict[str, Any]) -> str:
+            return "|".join(
+                [
+                    str(item.get("content") or item.get("event") or item.get("name") or ""),
+                    str(item.get("entity_id") or ""),
+                    str(item.get("field") or ""),
+                ]
+            ).strip("|")
+
+        active_signatures = {
+            _archive_signature(item)
+            for item in priority_foreshadowing + recent_events + structured_change_focus
+            if isinstance(item, dict)
+        }
+        archive_recall: Dict[str, List[Dict[str, Any]]] = {
+            "plot_threads": [],
+            "recent_events": [],
+            "structured_change_focus": [],
+        }
+
+        if memory_presence and (recall_mode == "boost" or consolidation_gap >= 3):
+            for item in archived_threads:
+                if not isinstance(item, dict):
+                    continue
+                signature = _archive_signature(item)
+                if signature in active_signatures:
+                    continue
+                content = str(item.get("content") or item.get("event") or item.get("name") or "")
+                score = _archive_score(content)
+                if score < 2:
+                    continue
+                archive_recall["plot_threads"].append(
+                    {
+                        "content": content,
+                        "status": str(item.get("status") or "已归档"),
+                        "tier": str(item.get("tier") or "archive"),
+                        "resolved_chapter": item.get("resolved_chapter"),
+                        "last_update_chapter": item.get("updated_at_chapter") or item.get("chapter") or 0,
+                        "memory_tier": "archive",
+                        "archive_score": score,
+                    }
+                )
+
+            for item in archived_events:
+                if not isinstance(item, dict):
+                    continue
+                signature = _archive_signature(item)
+                if signature in active_signatures:
+                    continue
+                text = str(item.get("event") or item.get("content") or "")
+                score = _archive_score(text)
+                if score < 2:
+                    continue
+                archive_recall["recent_events"].append(
+                    {
+                        "ch": item.get("ch") or item.get("chapter") or 0,
+                        "event": text,
+                        "memory_tier": "archive",
+                        "archive_score": score,
+                    }
+                )
+
+            for item in archived_changes:
+                if not isinstance(item, dict):
+                    continue
+                signature = _archive_signature(item)
+                if signature in active_signatures:
+                    continue
+                text = " ".join(
+                    str(part or "")
+                    for part in (
+                        item.get("entity_id"),
+                        item.get("field"),
+                        item.get("old_value"),
+                        item.get("new_value"),
+                    )
+                    if part
+                )
+                score = _archive_score(text)
+                if score < 2:
+                    continue
+                archive_recall["structured_change_focus"].append(
+                    {
+                        "ch": item.get("ch", 0),
+                        "entity_id": item.get("entity_id", ""),
+                        "field": item.get("field", ""),
+                        "change_kind": item.get("change_kind") or item.get("type") or "state_change",
+                        "memory_score": float(item.get("memory_score") or 0.0),
+                        "memory_tier": "archive",
+                        "old_value": item.get("old_value"),
+                        "new_value": item.get("new_value"),
+                        "delta": item.get("delta"),
+                        "archive_score": score,
+                    }
+                )
+
+            archive_recall["plot_threads"] = archive_recall["plot_threads"][:2]
+            archive_recall["recent_events"] = archive_recall["recent_events"][:2]
+            archive_recall["structured_change_focus"] = archive_recall["structured_change_focus"][:2]
 
         return {
             "version": story_memory_meta.get("version", ""),
@@ -1024,7 +1378,9 @@ class ContextManager:
             "priority_foreshadowing": priority_foreshadowing[:5],
             "recent_events": recent_events[-5:],
             "character_focus": character_focus[:5],
+            "emotional_focus": emotional_focus[:3],
             "structured_change_focus": structured_change_focus,
+            "archive_recall": archive_recall if any(archive_recall.values()) else {},
         }
 
     def _load_json_optional(self, path: Path) -> Dict[str, Any]:

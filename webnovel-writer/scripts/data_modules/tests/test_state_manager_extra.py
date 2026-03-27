@@ -259,6 +259,53 @@ def test_process_chapter_result_updates_story_memory(temp_project):
     assert story_memory["plot_threads"][0]["status"] == "已回收"
 
 
+def test_process_chapter_result_observer_reflector_pipeline_and_style_fatigue(temp_project):
+    manager = StateManager(temp_project, enable_sqlite_sync=False)
+    manager._state["protagonist_state"] = {"name": "萧炎"}
+
+    result = {
+        "observer_output": {
+            "entities_appeared": [{"id": "xiaoyan", "type": "角色", "mentions": ["萧炎"], "confidence": 0.96}],
+            "facts": [{"kind": "emotion", "entity_id": "xiaoyan", "field": "emotion", "value": "压抑"}],
+        },
+        "reflector_delta": {
+            "state_changes": [
+                {"entity_id": "xiaoyan", "field": "emotion", "old": "平静", "new": "压抑", "reason": "师门冲突"}
+            ],
+            "chapter_meta": {"hook": "旧伤复发"},
+        },
+        "emotional_arcs": [
+            {
+                "character_id": "萧炎",
+                "emotional_state": "压抑",
+                "emotional_trend": "down",
+                "trigger_event": "师门冲突",
+                "confidence": 0.86,
+            }
+        ],
+        "style_fatigue": [
+            {
+                "issue_type": "repetition",
+                "example": "他深吸一口气，又深吸一口气。",
+                "suggestion": "合并重复动作，改成具体反应。",
+            }
+        ],
+    }
+
+    warnings = manager.process_chapter_result(6, result)
+    assert warnings == []
+
+    chapter_meta = manager._state["chapter_meta"]["0006"]
+    assert chapter_meta["data_pipeline"]["mode"] == "observer_reflector"
+    assert chapter_meta["observer_output"]["fact_count"] == 1
+    assert chapter_meta["style_fatigue"][0]["type"] == "generic"
+    assert any(item.get("type") == "style_fatigue" for item in manager._state.get("review_checkpoints", []))
+
+    story_memory = json.loads(temp_project.story_memory_file.read_text(encoding="utf-8"))
+    assert story_memory["emotional_arcs"]["萧炎"][-1]["emotional_state"] == "压抑"
+    assert any("语言疲劳告警" in item.get("event", "") for item in story_memory["recent_events"])
+
+
 def test_export_context_and_protagonist_alias(temp_project):
     manager = StateManager(temp_project, enable_sqlite_sync=False)
     manager.add_entity(EntityState(id="xiaoyan", name="萧炎", type="角色", tier="核心"))
@@ -531,6 +578,10 @@ def test_sync_protagonist_from_string_and_empty_updates(temp_project):
 
 
 def test_state_manager_cli_commands(temp_project, monkeypatch, capsys):
+    temp_project.state_file.write_text(
+        json.dumps({"progress": {"current_chapter": 0, "total_words": 0}}, ensure_ascii=False),
+        encoding="utf-8",
+    )
     idx = IndexManager(temp_project)
     idx.upsert_entity(
         EntityMeta(

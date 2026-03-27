@@ -161,7 +161,9 @@ def step_allowed_before(command: str, step_id: str, completed_steps: list[Dict[s
 
 def _new_task(command: str, args: Dict[str, Any]) -> Dict[str, Any]:
     started_at = now_iso()
+    run_id = f"run_{started_at.replace(':', '').replace('-', '').replace('.', '')}"
     return {
+        "run_id": run_id,
         "command": command,
         "args": args,
         "started_at": started_at,
@@ -178,6 +180,13 @@ def _new_task(command: str, args: Dict[str, Any]) -> Dict[str, Any]:
             "state_json_modified": False,
             "entities_appeared": False,
             "review_completed": False,
+        },
+        "workflow_trace": {
+            "run_id": run_id,
+            "stage": "task_started",
+            "status": TASK_STATUS_RUNNING,
+            "chapter": args.get("chapter_num"),
+            "updated_at": started_at,
         },
     }
 
@@ -271,6 +280,14 @@ def start_step(step_id, step_name, progress_note=None):
     task["current_step"]["status"] = STEP_STATUS_RUNNING
     task["status"] = TASK_STATUS_RUNNING
     task["last_heartbeat"] = now_iso()
+    task["workflow_trace"] = {
+        "run_id": task.get("run_id"),
+        "stage": step_id,
+        "status": STEP_STATUS_RUNNING,
+        "chapter": task.get("args", {}).get("chapter_num"),
+        "updated_at": task["last_heartbeat"],
+        "step_name": step_name,
+    }
 
     save_state(state)
     safe_append_call_trace(
@@ -323,6 +340,14 @@ def complete_step(step_id, artifacts_json=None):
     task["completed_steps"].append(current_step)
     task["current_step"] = None
     task["last_heartbeat"] = now_iso()
+    task["workflow_trace"] = {
+        "run_id": task.get("run_id"),
+        "stage": step_id,
+        "status": STEP_STATUS_COMPLETED,
+        "chapter": task.get("args", {}).get("chapter_num"),
+        "updated_at": task["last_heartbeat"],
+        "step_name": current_step.get("name"),
+    }
 
     save_state(state)
     safe_append_call_trace(
@@ -349,6 +374,13 @@ def complete_task(final_artifacts_json=None):
 
     task["status"] = TASK_STATUS_COMPLETED
     task["completed_at"] = now_iso()
+    task["workflow_trace"] = {
+        "run_id": task.get("run_id"),
+        "stage": "task_completed",
+        "status": TASK_STATUS_COMPLETED,
+        "chapter": task.get("args", {}).get("chapter_num"),
+        "updated_at": task["completed_at"],
+    }
 
     if final_artifacts_json:
         try:
@@ -367,6 +399,7 @@ def complete_task(final_artifacts_json=None):
             "chapter": task["args"].get("chapter_num"),
             "status": TASK_STATUS_COMPLETED,
             "completed_at": task["completed_at"],
+            "workflow_trace": dict(task.get("workflow_trace") or {}),
         }
     )
 
@@ -408,6 +441,7 @@ def detect_interruption():
         "artifacts": task.get("artifacts", {}),
         "started_at": task.get("started_at"),
         "retry_count": int(task.get("retry_count", 0)),
+        "workflow_trace": task.get("workflow_trace", {}),
     }
 
     safe_append_call_trace(
@@ -697,6 +731,16 @@ def fail_current_task(reason: str = "manual_fail"):
         return
 
     _mark_task_failed(state, reason=reason)
+    task = state.get("current_task") or task
+    if task:
+        task["workflow_trace"] = {
+            "run_id": task.get("run_id"),
+            "stage": (task.get("current_step") or {}).get("id") or "task_failed",
+            "status": TASK_STATUS_FAILED,
+            "chapter": task.get("args", {}).get("chapter_num"),
+            "updated_at": now_iso(),
+            "failure_reason": reason,
+        }
     save_state(state)
     safe_append_call_trace(
         "task_failed",
@@ -723,6 +767,7 @@ def load_state():
     if state.get("current_task"):
         state["current_task"].setdefault("failed_steps", [])
         state["current_task"].setdefault("retry_count", 0)
+        state["current_task"].setdefault("workflow_trace", {})
     return state
 
 
@@ -750,6 +795,7 @@ def extract_stable_state(task):
         "chapter_num": task["args"].get("chapter_num"),
         "completed_at": task.get("completed_at"),
         "artifacts": task.get("artifacts", {}),
+        "workflow_trace": task.get("workflow_trace", {}),
     }
 
 

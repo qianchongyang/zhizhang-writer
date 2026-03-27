@@ -107,9 +107,23 @@ def test_memory_health_section_reflects_story_memory_freshness():
                     "version": "1",
                     "last_consolidated_chapter": 12,
                     "last_consolidated_at": "2026-03-27T10:00:00Z",
-                    "characters": {"萧炎": {"current_state": "闭关"}},
+                "characters": {"萧炎": {"current_state": "闭关"}},
+                    "emotional_arcs": {
+                        "萧炎": [
+                            {
+                                "character_id": "萧炎",
+                                "chapter": 5,
+                                "emotional_state": "压抑",
+                                "emotional_trend": "down",
+                                "trigger_event": "师门冲突",
+                            }
+                        ]
+                    },
                     "plot_threads": [{"content": "旧伏笔", "status": "active"}],
-                    "recent_events": [{"ch": 18, "event": "突破"}],
+                    "recent_events": [
+                        {"ch": 18, "event": "突破"},
+                        {"ch": 18, "event": "语言疲劳告警: 2 项", "type": "style_fatigue"},
+                    ],
                     "structured_change_ledger": [{"ch": 18, "entity_id": "xiaoyan", "field": "灵石", "change_kind": "resource_change", "old_value": "100", "new_value": "150", "delta": 50}],
                     "chapter_snapshots": [],
                     "archive": {
@@ -136,9 +150,12 @@ def test_memory_health_section_reflects_story_memory_freshness():
         assert "未回收伏笔数" in report
         assert "1" in report
         assert "结构化变化条目" in report
+        assert "情绪弧线角色数" in report
+        assert "语言疲劳告警数" in report
         assert "已归档伏笔数" in report
         assert "已归档变化条目" in report
         assert "结构化变化容量余量" in report
+        assert "情绪弧线长期未更新" in report
 
 
 def test_pacing_analysis_prefers_real_coolpoint_metadata_over_estimation():

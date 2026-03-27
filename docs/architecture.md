@@ -39,6 +39,33 @@
 └─────────────────────────────────────────────────────────────┘
 ```
 
+## 三层结构
+
+### 控制面
+
+- `author_intent`：长期创作目标与硬约束
+- `current_focus`：最近 1-3 章必须拉回的重点
+- `chapter_intent`：本章任务书，是 Context Agent 的标准产物
+
+控制面只负责“本章该写什么、不能偏到哪”，不是事实源。
+
+### 真相层
+
+- `state.json`：当前工作态
+- `story_memory.json`：跨章节稳定记忆、情感弧线、归档
+- `index.db`：历史索引、状态变化、关系
+- `vectors.db`：语义召回
+
+真相层是可追溯事实来源，控制面与运行层都要以它为准。
+
+### 运行层
+
+- `context_manager / extract_chapter_context`：把控制面、真相层和大纲编译成可写作上下文
+- `workflow_manager`：记录 `workflow_trace`
+- `dashboard`：展示任务书、召回、风险、记忆健康和运行阶段
+
+运行层负责“编译、展示、追溯”，不应私自篡改事实。
+
 ## 双 Agent 架构
 
 ### Context Agent（读）
@@ -49,7 +76,7 @@
 
 职责：从正文提取实体与状态变化，更新 `state.json`、`index.db`、`vectors.db` 与 `story_memory.json`，保证数据链闭环。
 
-`story_memory.json` 负责承载跨章节稳定记忆，包括角色阶段摘要、伏笔状态、近章事件、结构化变化账本与归档层；`state.json` 继续承载当前工作态，`index.db` 和 `vectors.db` 继续负责历史索引与语义召回。
+`story_memory.json` 负责承载跨章节稳定记忆，包括角色阶段摘要、伏笔状态、近章事件、结构化变化账本、情感弧线与归档层；`state.json` 继续承载当前工作态，`index.db` 和 `vectors.db` 继续负责历史索引与语义召回。
 
 ## 六维并行审查
 

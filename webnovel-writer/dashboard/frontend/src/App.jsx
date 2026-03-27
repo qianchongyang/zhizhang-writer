@@ -128,6 +128,9 @@ function DashboardPage({ data, onNavigate }) {
     const storyRecall = data.story_recall || {}
     const memoryHealth = data.memory_health || {}
     const writingGuidance = data.writing_guidance || {}
+    const chapterIntent = data.chapter_intent || {}
+    const styleFatigue = data.style_fatigue || {}
+    const workflowTrace = data.workflow_trace || {}
     const readerSignal = data.reader_signal || {}
     const genreProfile = data.genre_profile || {}
     const chapterOutline = data.chapter_outline || ''
@@ -180,6 +183,7 @@ function DashboardPage({ data, onNavigate }) {
                     <span>卷 {progress.current_volume || 1} · 目标 {info.target_chapters || '?'}</span>
                     <span>召回信号 {unresolvedForeshadow.length}</span>
                     <span>Gap {memoryHealth.consolidation_gap || 0}</span>
+                    {workflowTrace.stage ? <span>流程 {workflowTrace.stage} · {workflowTrace.status || 'unknown'}</span> : null}
                 </div>
                 <div className="progress-track cockpit-progress">
                     <div className="progress-fill" style={{ width: `${pct}%` }} />
@@ -201,6 +205,20 @@ function DashboardPage({ data, onNavigate }) {
                             <span className="card-badge badge-purple">Ch.{progress.current_chapter || data.chapter || 0}</span>
                         </div>
                         <div className="entity-detail">
+                            {chapterIntent.chapter_goal ? (
+                                <div className="entity-current-block">
+                                    <strong>章节目标：</strong>
+                                    <p className="entity-desc">{chapterIntent.chapter_goal}</p>
+                                </div>
+                            ) : null}
+                            {Array.isArray(chapterIntent.must_resolve) && chapterIntent.must_resolve.length > 0 ? (
+                                <div className="entity-current-block">
+                                    <strong>必须回收：</strong>
+                                    <ul className="summary-list compact">
+                                        {chapterIntent.must_resolve.slice(0, 3).map((item, index) => <li key={index}>{item}</li>)}
+                                    </ul>
+                                </div>
+                            ) : null}
                             <p className="entity-desc">{chapterOutline || '暂无本章大纲'}</p>
                             {Array.isArray(writingGuidance.guidance_items) && writingGuidance.guidance_items.length > 0 ? (
                                 <div className="entity-current-block">
@@ -293,8 +311,19 @@ function DashboardPage({ data, onNavigate }) {
                             <p><strong>consolidation gap：</strong>{memoryHealth.consolidation_gap || 0}</p>
                             <p><strong>召回信号：</strong>{memoryHealth.signal_count || 0}</p>
                             <p><strong>未回收伏笔：</strong>{memoryHealth.priority_foreshadowing_count || 0}</p>
+                            <p><strong>情绪信号：</strong>{memoryHealth.emotional_focus_count || 0}</p>
                             <p><strong>归档召回：</strong>{memoryHealth.archive_available ? '可用' : '未命中'}</p>
                             {memoryHealth.memory_stale ? <p className="debt-positive">记忆层偏旧，建议优先整理。</p> : null}
+                            {Array.isArray(chapterIntent.story_risks) && chapterIntent.story_risks.length > 0 ? (
+                                <>
+                                    <div className="card-header-inline">
+                                        <strong>本章风险</strong>
+                                    </div>
+                                    <ul className="summary-list compact">
+                                        {chapterIntent.story_risks.slice(0, 3).map((item, index) => <li key={index}>{item}</li>)}
+                                    </ul>
+                                </>
+                            ) : null}
                         </div>
                     </div>
 
@@ -324,6 +353,7 @@ function DashboardPage({ data, onNavigate }) {
                             <p><strong>复合题材：</strong>{Array.isArray(genreProfile.genres) && genreProfile.genres.length > 0 ? genreProfile.genres.join(' + ') : '—'}</p>
                             <p><strong>最近审查均分：</strong>{readerSignal.review_trend?.overall_avg ?? '—'}</p>
                             <p><strong>低分区间：</strong>{Array.isArray(readerSignal.low_score_ranges) ? readerSignal.low_score_ranges.length : 0}</p>
+                            <p><strong>语言疲劳：</strong>{styleFatigue.count || 0}</p>
                         </div>
                     </div>
                 </div>

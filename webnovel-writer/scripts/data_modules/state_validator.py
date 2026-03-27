@@ -59,6 +59,7 @@ _STORY_MEMORY_RECENT_EVENT_LIMIT = 50
 _STORY_MEMORY_CHAPTER_SNAPSHOT_LIMIT = 20
 _STORY_MEMORY_CHANGE_LEDGER_LIMIT = 50
 _STORY_MEMORY_ARCHIVE_STALE_CHAPTER_GAP = 3
+_STORY_MEMORY_EMOTIONAL_ARC_LIMIT = 12
 
 _CHANGE_KIND_RELATIONSHIP = "relationship_change"
 _CHANGE_KIND_LOCATION = "location_change"
@@ -535,12 +536,56 @@ def _normalize_story_memory_snapshot(item: Mapping[str, Any], index: int) -> Dic
     return normalized
 
 
+def _normalize_emotional_arc_item(character_id: str, item: Mapping[str, Any], index: int) -> Dict[str, Any]:
+    normalized = dict(item)
+    chapter = to_positive_int(item.get("chapter") or item.get("ch") or item.get("last_update_chapter")) or 0
+    emotional_state = str(item.get("emotional_state") or item.get("state") or "").strip()
+    emotional_trend = str(item.get("emotional_trend") or item.get("trend") or "stable").strip() or "stable"
+    trigger_event = str(item.get("trigger_event") or item.get("event") or "").strip()
+    normalized["character_id"] = character_id
+    normalized["chapter"] = chapter
+    normalized["emotional_state"] = emotional_state
+    normalized["emotional_trend"] = emotional_trend
+    normalized["trigger_event"] = trigger_event
+    normalized.setdefault("source_of_truth", "story_memory")
+    normalized["confidence"] = float(item.get("confidence") or 1.0)
+    normalized["arc_id"] = str(
+        item.get("arc_id")
+        or item.get("story_memory_id")
+        or _stable_story_memory_id("emotion", chapter or index, character_id, f"{emotional_state}|{emotional_trend}|{trigger_event}")
+    )
+    return normalized
+
+
+def _normalize_story_memory_emotional_arcs(raw_arcs: Any) -> Dict[str, List[Dict[str, Any]]]:
+    normalized: Dict[str, List[Dict[str, Any]]] = {}
+    if not isinstance(raw_arcs, Mapping):
+        return normalized
+
+    for character_id, items in raw_arcs.items():
+        if not isinstance(items, list):
+            continue
+        character_key = str(character_id or "").strip()
+        if not character_key:
+            continue
+        rows: List[Dict[str, Any]] = []
+        for index, item in enumerate(items):
+            if isinstance(item, Mapping):
+                rows.append(_normalize_emotional_arc_item(character_key, item, index))
+        rows.sort(key=lambda row: (int(row.get("chapter") or 0), str(row.get("arc_id") or "")))
+        if len(rows) > _STORY_MEMORY_EMOTIONAL_ARC_LIMIT:
+            rows = rows[-_STORY_MEMORY_EMOTIONAL_ARC_LIMIT:]
+        normalized[character_key] = rows
+    return normalized
+
+
 def _normalize_story_memory_archive(raw_archive: Any) -> Dict[str, List[Dict[str, Any]]]:
     archive = {
         "plot_threads": [],
         "recent_events": [],
         "structured_change_ledger": [],
         "chapter_snapshots": [],
+        "emotional_arcs": [],
     }
     if not isinstance(raw_archive, Mapping):
         return archive
@@ -559,6 +604,8 @@ def _normalize_story_memory_archive(raw_archive: Any) -> Dict[str, List[Dict[str
                     archive[key].append(_normalize_story_memory_change_ledger(item, index))
                 elif key == "chapter_snapshots":
                     archive[key].append(_normalize_story_memory_snapshot(item, index))
+                elif key == "emotional_arcs":
+                    archive[key].append(_normalize_emotional_arc_item(str(item.get("character_id") or ""), item, index))
     return archive
 
 
@@ -628,6 +675,18 @@ def _archive_story_memory_items(
         active_snapshots = active_snapshots[-_STORY_MEMORY_CHAPTER_SNAPSHOT_LIMIT :]
     normalized["chapter_snapshots"] = active_snapshots
 
+    active_arcs: Dict[str, List[Dict[str, Any]]] = {}
+    for character_id, items in (normalized.get("emotional_arcs") or {}).items():
+        if not isinstance(items, list):
+            continue
+        rows = list(items)
+        if len(rows) > _STORY_MEMORY_EMOTIONAL_ARC_LIMIT:
+            overflow = rows[:-_STORY_MEMORY_EMOTIONAL_ARC_LIMIT]
+            _append_archive("emotional_arcs", overflow)
+            rows = rows[-_STORY_MEMORY_EMOTIONAL_ARC_LIMIT:]
+        active_arcs[str(character_id)] = rows
+    normalized["emotional_arcs"] = active_arcs
+
     return archive
 
 
@@ -645,11 +704,13 @@ def normalize_story_memory(raw_story_memory: Any) -> Dict[str, Any]:
         "recent_events": [],
         "structured_change_ledger": [],
         "chapter_snapshots": [],
+        "emotional_arcs": {},
         "archive": {
             "plot_threads": [],
             "recent_events": [],
             "structured_change_ledger": [],
             "chapter_snapshots": [],
+            "emotional_arcs": [],
         },
         "meta": dict(raw_story_memory.get("meta") or {}),
     }
@@ -683,6 +744,8 @@ def normalize_story_memory(raw_story_memory: Any) -> Dict[str, Any]:
         for index, item in enumerate(chapter_snapshots):
             if isinstance(item, Mapping):
                 normalized["chapter_snapshots"].append(_normalize_story_memory_snapshot(item, index))
+
+    normalized["emotional_arcs"] = _normalize_story_memory_emotional_arcs(raw_story_memory.get("emotional_arcs"))
 
     archive = _archive_story_memory_items(normalized, raw_story_memory.get("archive"))
     normalized["archive"] = archive

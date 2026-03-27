@@ -313,6 +313,7 @@ def _load_contract_context(project_root: Path, chapter_num: int) -> Dict[str, An
         "context_weight_stage": (payload.get("meta") or {}).get("context_weight_stage"),
         "memory": (sections.get("memory") or {}).get("content", {}),
         "story_recall": (sections.get("story_recall") or {}).get("content", {}),
+        "chapter_intent": (sections.get("chapter_intent") or {}).get("content", {}),
         "reader_signal": (sections.get("reader_signal") or {}).get("content", {}),
         "genre_profile": (sections.get("genre_profile") or {}).get("content", {}),
         "writing_guidance": (sections.get("writing_guidance") or {}).get("content", {}),
@@ -342,6 +343,7 @@ def build_chapter_context_payload(project_root: Path, chapter_num: int) -> Dict[
         "context_weight_stage": contract_context.get("context_weight_stage"),
         "memory": contract_context.get("memory", {}),
         "story_recall": contract_context.get("story_recall", {}),
+        "chapter_intent": contract_context.get("chapter_intent", {}),
         "reader_signal": contract_context.get("reader_signal", {}),
         "genre_profile": contract_context.get("genre_profile", {}),
         "writing_guidance": contract_context.get("writing_guidance", {}),
@@ -377,6 +379,39 @@ def _render_text(payload: Dict[str, Any]) -> str:
     lines.append("")
     lines.append(str(payload.get("state_summary", "")))
     lines.append("")
+
+    chapter_intent = payload.get("chapter_intent") or {}
+    if chapter_intent:
+        lines.append("## 本章任务书")
+        lines.append("")
+        if chapter_intent.get("focus_title"):
+            lines.append(f"- 当前焦点: {chapter_intent.get('focus_title')}")
+        if chapter_intent.get("chapter_goal"):
+            lines.append(f"- chapter_goal: {chapter_intent.get('chapter_goal')}")
+        must_resolve = chapter_intent.get("must_resolve") or []
+        if must_resolve:
+            lines.append("- must_resolve:")
+            for item in must_resolve:
+                lines.append(f"  - {item}")
+        story_risks = chapter_intent.get("story_risks") or []
+        if story_risks:
+            lines.append("- story_risks:")
+            for item in story_risks:
+                lines.append(f"  - {item}")
+        hard_constraints = chapter_intent.get("hard_constraints") or []
+        if hard_constraints:
+            lines.append("- hard_constraints:")
+            for item in hard_constraints:
+                lines.append(f"  - {item}")
+        priority_memory = chapter_intent.get("priority_memory") or []
+        if priority_memory:
+            lines.append("- priority_memory:")
+            for item in priority_memory[:4]:
+                if not isinstance(item, dict):
+                    lines.append(f"  - {item}")
+                    continue
+                lines.append(f"  - [{item.get('type')}] {item.get('label')}: {item.get('detail')}")
+        lines.append("")
 
     story_recall = payload.get("story_recall") or {}
     if story_recall:
@@ -417,6 +452,16 @@ def _render_text(payload: Dict[str, Any]) -> str:
                 state_text = str(row.get("current_state") or "—")
                 last_update = row.get("last_update_chapter") or "—"
                 lines.append(f"  - {name}: {state_text}（Ch.{last_update}）")
+        emotional_focus = story_recall.get("emotional_focus") or []
+        if emotional_focus:
+            lines.append("- 情绪弧线:")
+            for row in emotional_focus[:3]:
+                if not isinstance(row, dict):
+                    continue
+                lines.append(
+                    f"  - {row.get('name')}: {row.get('emotional_state') or '—'} / {row.get('emotional_trend') or 'stable'}"
+                    f"（触发: {row.get('trigger_event') or '—'}，Ch.{row.get('chapter') or '—'}）"
+                )
         change_focus = story_recall.get("structured_change_focus") or []
         if change_focus:
             lines.append("- 结构化变化账本:")
@@ -441,6 +486,35 @@ def _render_text(payload: Dict[str, Any]) -> str:
                 ch = row.get("ch") or row.get("chapter") or "?"
                 event = row.get("event") or row.get("content") or "—"
                 lines.append(f"  - Ch.{ch}: {event}")
+        archive_recall = story_recall.get("archive_recall") or {}
+        if archive_recall:
+            lines.append("- 归档召回:")
+            archived_threads = archive_recall.get("plot_threads") or []
+            if archived_threads:
+                lines.append("  - 归档伏笔:")
+                for row in archived_threads[:3]:
+                    if not isinstance(row, dict):
+                        continue
+                    label = str(row.get("content") or row.get("event") or "未命名伏笔")
+                    lines.append(f"    - {label}（tier={row.get('memory_tier')}, score={row.get('archive_score')}）")
+            archived_events = archive_recall.get("recent_events") or []
+            if archived_events:
+                lines.append("  - 归档事件:")
+                for row in archived_events[:3]:
+                    if not isinstance(row, dict):
+                        continue
+                    ch = row.get("ch") or row.get("chapter") or "?"
+                    event = row.get("event") or "—"
+                    lines.append(f"    - Ch.{ch}: {event}")
+            archived_changes = archive_recall.get("structured_change_focus") or []
+            if archived_changes:
+                lines.append("  - 归档变化:")
+                for row in archived_changes[:3]:
+                    if not isinstance(row, dict):
+                        continue
+                    entity_id = str(row.get("entity_id") or "—")
+                    field = str(row.get("field") or "—")
+                    lines.append(f"    - {entity_id}.{field}（tier={row.get('memory_tier')}, score={row.get('archive_score')}）")
         lines.append("")
 
     story_memory = payload.get("story_memory") or {}
@@ -482,6 +556,19 @@ def _render_text(payload: Dict[str, Any]) -> str:
                 ch = row.get("ch") or row.get("chapter") or "?"
                 event = row.get("event") or row.get("content") or "—"
                 lines.append(f"  - Ch.{ch}: {event}")
+        emotional_arcs = story_memory.get("emotional_arcs") or {}
+        if emotional_arcs:
+            lines.append("- 情感弧线:")
+            for name, rows in list(emotional_arcs.items())[:3]:
+                if not isinstance(rows, list) or not rows:
+                    continue
+                latest = rows[-1]
+                if not isinstance(latest, dict):
+                    continue
+                lines.append(
+                    f"  - {name}: {latest.get('emotional_state') or '—'} / {latest.get('emotional_trend') or 'stable'}"
+                    f"（Ch.{latest.get('chapter') or '—'}）"
+                )
         lines.append("")
 
     contract_version = payload.get("context_contract_version")
@@ -593,6 +680,17 @@ def _render_text(payload: Dict[str, Any]) -> str:
         refs = genre_profile.get("reference_hints") or []
         for row in refs[:3]:
             lines.append(f"- {row}")
+            lines.append("")
+
+    previous_meta_style = []
+    for item in payload.get("story_recall", {}).get("recent_events", []):
+        if isinstance(item, dict) and str(item.get("type") or "") == "style_fatigue":
+            previous_meta_style.append(str(item.get("event") or "语言疲劳告警"))
+    if previous_meta_style:
+        lines.append("## 语言疲劳信号")
+        lines.append("")
+        for item in previous_meta_style[:3]:
+            lines.append(f"- {item}")
         lines.append("")
 
     rag_assist = payload.get("rag_assist") or {}

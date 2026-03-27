@@ -127,6 +127,9 @@ python "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" context -- -
 python "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" extract-context --chapter {NNNN} --format json
 ```
 
+- 必须读取：`chapter_intent.chapter_goal / must_resolve / story_risks / hard_constraints / priority_memory`
+- 必须读取：`memory.current_focus`，若存在则优先视为最近 1-3 章控制面
+- 必须读取：`memory.author_intent`，其硬约束优先于临时写作偏好
 - 必须读取：`writing_guidance.guidance_items`
 - 推荐读取：`reader_signal` 与 `genre_profile.reference_hints`
 - 条件读取：`rag_assist`（当 `invoked=true` 且 `hits` 非空时，必须提炼成可执行约束，禁止只贴检索命中）
@@ -136,6 +139,7 @@ python "${SCRIPTS_DIR}/webnovel.py" --project-root "{project_root}" extract-cont
   - 未回收伏笔
   - 最近重大事件
   - 关键角色当前状态
+  - 关键角色情绪状态与最近转折点
   - 高分结构化变化
 - 若 `story_recall.recall_policy.mode=normal`，只保留最相关的稳定记忆，避免上下文膨胀
 - 若 `story_recall.recall_policy.mode=off`，说明当前 story_memory 无有效内容，继续使用现有上下文链路

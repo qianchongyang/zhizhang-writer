@@ -938,6 +938,9 @@ class StatusReporter:
         change_ledger = memory.get("structured_change_ledger", memory.get("numeric_ledger", []))
         if not isinstance(change_ledger, list):
             change_ledger = []
+        emotional_arcs = memory.get("emotional_arcs", {})
+        if not isinstance(emotional_arcs, dict):
+            emotional_arcs = {}
         consolidated_changes = [
             item
             for item in change_ledger
@@ -951,6 +954,28 @@ class StatusReporter:
             issues.append(f"记忆落后当前章节 {lag} 章")
         if len(active_threads) > self.config.context_max_urgent_foreshadowing:
             issues.append(f"未回收伏笔 {len(active_threads)} 条，超过建议阈值")
+        emotional_stale_count = 0
+        for items in emotional_arcs.values():
+            if not isinstance(items, list) or not items:
+                continue
+            latest = items[-1]
+            chapter = int((latest or {}).get("chapter") or 0)
+            if chapter > 0 and current_chapter > 0 and (current_chapter - chapter) >= int(getattr(self.config, "context_emotional_arc_stale_gap", 6) or 6):
+                emotional_stale_count += 1
+        if emotional_stale_count > 0:
+            issues.append(f"{emotional_stale_count} 条情绪弧线长期未更新")
+
+        style_fatigue_count = 0
+        chapter_meta = self.state.get("chapter_meta", {}) if isinstance(self.state, dict) else {}
+        if isinstance(chapter_meta, dict):
+            latest_key = sorted(chapter_meta.keys())[-1] if chapter_meta else ""
+            latest_meta = chapter_meta.get(latest_key) or {}
+            if isinstance(latest_meta, dict):
+                raw_style_fatigue = latest_meta.get("style_fatigue") or []
+                if isinstance(raw_style_fatigue, list):
+                    style_fatigue_count = len(raw_style_fatigue)
+        if style_fatigue_count > 0:
+            issues.append(f"最近一章有 {style_fatigue_count} 项语言疲劳告警")
 
         lines = [
             "## 🧠 记忆健康",
@@ -961,10 +986,12 @@ class StatusReporter:
             f"- **角色记忆数**: {len(characters)}",
             f"- **未回收伏笔数**: {len(active_threads)}",
             f"- **近章事件数**: {len(recent_events)}",
+            f"- **情绪弧线角色数**: {len(emotional_arcs)}",
             f"- **结构化变化条目**: {len(change_ledger)}",
             f"- **已沉淀变化条目**: {len(consolidated_changes)}",
             f"- **已归档伏笔数**: {len(archived_threads)}",
             f"- **已归档变化条目**: {len(archived_changes)}",
+            f"- **语言疲劳告警数**: {style_fatigue_count}",
             f"- **结构化变化容量余量**: {max(0, 50 - len(change_ledger))}",
         ]
 

@@ -1290,6 +1290,7 @@ class StateManager:
 
         返回警告列表
         """
+        result = self._expand_data_agent_result(result)
         warnings = []
 
         # v5.1 引入: 记录章节号用于 SQLite 同步
@@ -1353,10 +1354,27 @@ class StateManager:
         # 写入 chapter_meta（钩子/模式/结束状态）
         chapter_meta = result.get("chapter_meta")
         if isinstance(chapter_meta, dict):
+            style_fatigue_entries = self._normalize_style_fatigue_entries(result.get("style_fatigue"))
+            if style_fatigue_entries:
+                chapter_meta = dict(chapter_meta)
+                chapter_meta["style_fatigue"] = style_fatigue_entries
+                result["chapter_meta"] = chapter_meta
             meta_key = f"{int(chapter):04d}"
             self._state.setdefault("chapter_meta", {})
             self._state["chapter_meta"][meta_key] = chapter_meta
             self._pending_chapter_meta[meta_key] = chapter_meta
+            if style_fatigue_entries:
+                checkpoints = self._state.setdefault("review_checkpoints", [])
+                checkpoints.append(
+                    {
+                        "chapter": chapter,
+                        "type": "style_fatigue",
+                        "issues": style_fatigue_entries,
+                        "created_at": datetime.now().isoformat(),
+                    }
+                )
+                if len(checkpoints) > 50:
+                    del checkpoints[:-50]
 
         # v5.6 新增: 处理角色状态（外貌/穿着/性别表达）
         for character_id, states in result.get("character_states", {}).items():
@@ -1408,6 +1426,7 @@ class StateManager:
             "last_consolidated_at": "",
             "last_updated_at": "",
             "characters": {},
+            "emotional_arcs": {},
             "plot_threads": [],
             "recent_events": [],
             "structured_change_ledger": [],
@@ -1487,6 +1506,143 @@ class StateManager:
             if value_text:
                 parts.append(f"{state_type}:{value_text}")
         return "；".join(parts) if parts else ""
+
+    def _normalize_style_fatigue_entries(self, raw_value: Any) -> List[Dict[str, Any]]:
+        if isinstance(raw_value, dict):
+            raw_items = raw_value.get("issues") or []
+        elif isinstance(raw_value, list):
+            raw_items = raw_value
+        else:
+            raw_items = []
+
+        normalized: List[Dict[str, Any]] = []
+        for item in raw_items:
+            if isinstance(item, str):
+                normalized.append({"type": "generic", "example": item, "suggestion": ""})
+                continue
+            if not isinstance(item, dict):
+                continue
+            normalized.append(
+                {
+                    "type": str(item.get("type") or item.get("kind") or "generic"),
+                    "example": str(item.get("example") or item.get("excerpt") or item.get("text") or ""),
+                    "suggestion": str(item.get("suggestion") or item.get("rewrite_hint") or ""),
+                    "confidence": float(item.get("confidence") or 0.7),
+                }
+            )
+        return normalized
+
+    def _expand_data_agent_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        if not isinstance(result, dict):
+            return {}
+
+        expanded = deepcopy(result)
+        reflector_delta = result.get("reflector_delta")
+        observer_output = result.get("observer_output")
+        if isinstance(reflector_delta, dict):
+            for key in (
+                "entities_appeared",
+                "entities_new",
+                "state_changes",
+                "relationships_new",
+                "uncertain",
+                "chapter_meta",
+                "character_states",
+                "item_states",
+                "time_states",
+                "foreshadowing_updates",
+                "emotional_arcs",
+                "style_fatigue",
+            ):
+                if key in reflector_delta and key not in expanded:
+                    expanded[key] = deepcopy(reflector_delta.get(key))
+                elif key in reflector_delta and key in {"chapter_meta"} and isinstance(expanded.get(key), dict):
+                    merged = dict(reflector_delta.get(key) or {})
+                    merged.update(expanded.get(key) or {})
+                    expanded[key] = merged
+
+        chapter_meta = dict(expanded.get("chapter_meta") or {})
+        if isinstance(observer_output, dict):
+            chapter_meta["observer_output"] = {
+                "entities_appeared": len(observer_output.get("entities_appeared") or []),
+                "entities_new": len(observer_output.get("entities_new") or []),
+                "state_changes": len(observer_output.get("state_changes") or []),
+                "relationships_new": len(observer_output.get("relationships_new") or []),
+                "fact_count": len(observer_output.get("facts") or []),
+            }
+        if isinstance(reflector_delta, dict):
+            chapter_meta["data_pipeline"] = {
+                "mode": "observer_reflector",
+                "observer_present": isinstance(observer_output, dict),
+                "reflector_present": True,
+            }
+        elif observer_output is not None:
+            chapter_meta["data_pipeline"] = {
+                "mode": "observer_only",
+                "observer_present": True,
+                "reflector_present": False,
+            }
+        if chapter_meta:
+            expanded["chapter_meta"] = chapter_meta
+        return expanded
+
+    def _append_emotional_arc_entries(
+        self,
+        target: Dict[str, List[Dict[str, Any]]],
+        chapter: int,
+        raw_arcs: Any,
+    ) -> None:
+        if isinstance(raw_arcs, list):
+            regrouped: Dict[str, List[Dict[str, Any]]] = {}
+            for item in raw_arcs:
+                if not isinstance(item, dict):
+                    continue
+                character_key = str(item.get("character_id") or item.get("name") or "").strip()
+                if not character_key:
+                    continue
+                regrouped.setdefault(character_key, []).append(item)
+            raw_arcs = regrouped
+
+        if not isinstance(raw_arcs, dict):
+            return
+
+        for character_id, items in raw_arcs.items():
+            character_key = str(character_id or "").strip()
+            if not character_key or not isinstance(items, list):
+                continue
+            bucket = list(target.get(character_key) or [])
+            existing = {
+                (
+                    int(item.get("chapter") or 0),
+                    str(item.get("emotional_state") or ""),
+                    str(item.get("trigger_event") or ""),
+                )
+                for item in bucket
+                if isinstance(item, dict)
+            }
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                normalized = {
+                    "character_id": character_key,
+                    "chapter": int(item.get("chapter") or item.get("ch") or chapter),
+                    "emotional_state": str(item.get("emotional_state") or item.get("state") or "").strip(),
+                    "emotional_trend": str(item.get("emotional_trend") or item.get("trend") or "stable").strip() or "stable",
+                    "trigger_event": str(item.get("trigger_event") or item.get("event") or "").strip(),
+                    "confidence": float(item.get("confidence") or 1.0),
+                    "source_of_truth": str(item.get("source_of_truth") or "story_memory"),
+                }
+                key = (
+                    normalized["chapter"],
+                    normalized["emotional_state"],
+                    normalized["trigger_event"],
+                )
+                if key in existing:
+                    continue
+                bucket.append(normalized)
+                existing.add(key)
+            bucket.sort(key=lambda row: (int(row.get("chapter") or 0), str(row.get("emotional_state") or "")))
+            target[character_key] = bucket[-12:]
 
     def _append_unique_story_events(self, target: List[Dict[str, Any]], events: List[Dict[str, Any]], limit: int = 50) -> None:
         existing = {
@@ -1709,6 +1865,7 @@ class StateManager:
 
             # 角色记忆：主角 + result 中的 character_states
             characters = memory.setdefault("characters", {})
+            emotional_arcs = memory.setdefault("emotional_arcs", {})
             protagonist_name = ""
             protagonist_state = self._state.get("protagonist_state", {})
             if isinstance(protagonist_state, dict):
@@ -1745,6 +1902,33 @@ class StateManager:
                     milestones.append({"ch": chapter, "event": summary})
                     entry["milestones"] = self._trim_story_milestones(milestones)
 
+            self._append_emotional_arc_entries(emotional_arcs, chapter, result.get("emotional_arcs"))
+            for change in result.get("state_changes", []) or []:
+                if not isinstance(change, dict):
+                    continue
+                field = str(change.get("field") or "").strip()
+                if field not in {"情绪", "心情", "emotion", "mood"}:
+                    continue
+                entity_id = str(change.get("entity_id") or "").strip()
+                if not entity_id:
+                    continue
+                self._append_emotional_arc_entries(
+                    emotional_arcs,
+                    chapter,
+                    {
+                        entity_id: [
+                            {
+                                "chapter": chapter,
+                                "emotional_state": str(change.get("new") or change.get("new_value") or "").strip(),
+                                "emotional_trend": "shift",
+                                "trigger_event": str(change.get("reason") or "状态变化").strip(),
+                                "source_of_truth": "index.db",
+                                "confidence": float(change.get("confidence") or 0.85),
+                            }
+                        ]
+                    },
+                )
+
             # 事件记忆：状态变化 + 章节结尾信息
             recent_events = list(memory.get("recent_events") or [])
             change_ledger = list(memory.get("structured_change_ledger") or memory.get("numeric_ledger") or [])
@@ -1770,6 +1954,15 @@ class StateManager:
                 ending = chapter_meta.get("ending")
                 if ending:
                     new_events.append({"ch": chapter, "event": f"结尾: {self._stringify_story_value(ending)}", "type": "chapter_meta"})
+                style_fatigue = chapter_meta.get("style_fatigue")
+                if isinstance(style_fatigue, list) and style_fatigue:
+                    new_events.append(
+                        {
+                            "ch": chapter,
+                            "event": f"语言疲劳告警: {len(style_fatigue)} 项",
+                            "type": "style_fatigue",
+                        }
+                    )
 
             for change in result.get("state_changes", []) or []:
                 if not isinstance(change, dict):
@@ -1806,6 +1999,7 @@ class StateManager:
                 "protagonist": protagonist_name,
                 "protagonist_state": protagonist_summary,
                 "chapter_meta": chapter_meta,
+                "emotional_arc_count": sum(len(items) for items in emotional_arcs.values() if isinstance(items, list)),
             }
             chapter_snapshots = [item for item in chapter_snapshots if int((item or {}).get("chapter") or 0) != chapter]
             chapter_snapshots.append(snapshot)

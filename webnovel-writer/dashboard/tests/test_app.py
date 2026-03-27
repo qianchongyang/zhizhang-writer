@@ -11,8 +11,12 @@ from dashboard.app import create_app
 def _build_project_root(tmp_path: Path) -> Path:
     root = tmp_path / "novel-project"
     webnovel = root / ".webnovel"
+    memory_dir = webnovel / "memory"
+    control_dir = webnovel / "control"
     outline_dir = root / "大纲"
     webnovel.mkdir(parents=True, exist_ok=True)
+    memory_dir.mkdir(parents=True, exist_ok=True)
+    control_dir.mkdir(parents=True, exist_ok=True)
     outline_dir.mkdir(parents=True, exist_ok=True)
 
     (webnovel / "state.json").write_text(
@@ -39,7 +43,17 @@ def _build_project_root(tmp_path: Path) -> Path:
                     "current_dominant": "quest",
                     "history": [{"chapter": 1, "strand": "quest"}],
                 },
-                "chapter_meta": {},
+                "chapter_meta": {
+                    "0001": {
+                        "style_fatigue": [
+                            {
+                                "issue_type": "repetition",
+                                "example": "他深吸一口气，又深吸一口气。",
+                                "suggestion": "合并重复动作。",
+                            }
+                        ]
+                    }
+                },
                 "disambiguation_warnings": [],
                 "disambiguation_pending": [],
             },
@@ -47,7 +61,7 @@ def _build_project_root(tmp_path: Path) -> Path:
         ),
         encoding="utf-8",
     )
-    (webnovel / "story_memory.json").write_text(
+    (memory_dir / "story_memory.json").write_text(
         json.dumps(
             {
                 "version": "1",
@@ -56,10 +70,20 @@ def _build_project_root(tmp_path: Path) -> Path:
                 "characters": {
                     "萧炎": {"current_state": "宗门修行", "last_update_chapter": 1}
                 },
+                "emotional_arcs": {
+                    "萧炎": [
+                        {
+                            "chapter": 1,
+                            "emotional_state": "克制",
+                            "emotional_trend": "steady",
+                            "trigger_event": "入门试炼",
+                        }
+                    ]
+                },
                 "plot_threads": [
                     {"name": "身世线索", "status": "active", "tier": "核心", "urgency": 90}
                 ],
-                "recent_events": [{"ch": 1, "event": "入门测试"}],
+                "recent_events": [{"ch": 1, "event": "入门测试"}, {"ch": 1, "event": "语言疲劳告警: 1 项", "type": "style_fatigue"}],
                 "structured_change_ledger": [
                     {
                         "ch": 1,
@@ -73,6 +97,35 @@ def _build_project_root(tmp_path: Path) -> Path:
                 ],
                 "chapter_snapshots": [],
                 "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (control_dir / "current_focus.json").write_text(
+        json.dumps(
+            {
+                "title": "推进主线",
+                "goal": "本章要交代身世线索的第一层答案",
+                "must_resolve": ["触发身世线索"],
+                "hard_constraints": ["不要引入新势力"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (webnovel / "workflow_state.json").write_text(
+        json.dumps(
+            {
+                "current_task": {
+                    "workflow_trace": {
+                        "run_id": "run_001",
+                        "stage": "step_1_context",
+                        "status": "running",
+                        "chapter": 1,
+                    }
+                },
+                "history": [],
             },
             ensure_ascii=False,
         ),
@@ -96,4 +149,7 @@ def test_dashboard_summary_returns_cockpit_data(tmp_path):
     assert data["memory_health"]["current_chapter"] == 1
     assert "recall_policy" in data["story_recall"]
     assert isinstance(data["story_recall"]["priority_foreshadowing"], list)
+    assert data["chapter_intent"]["focus_title"] == "推进主线"
+    assert data["style_fatigue"]["count"] == 1
+    assert data["workflow_trace"]["stage"] == "step_1_context"
     assert "diagnostics" in data

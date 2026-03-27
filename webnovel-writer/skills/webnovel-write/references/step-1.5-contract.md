@@ -48,6 +48,7 @@
 2. 条件必读：`rag_assist`（`invoked=true` 且 `hits` 非空）
 3. 选读：`reader_signal`、`genre_profile.reference_hints`
 4. 记忆优先：`story_recall.recall_policy`、`story_recall.priority_foreshadowing`、`story_recall.character_focus`
+5. 控制面优先：`chapter_intent`、`memory.current_focus`、`memory.author_intent`
 
 ## 记忆召回策略
 
@@ -55,3 +56,5 @@
 - `mode=normal`：只保留最相关的稳定记忆，避免信息膨胀
 - `mode=off`：当前没有有效 story_memory，可直接使用现有上下文链路
 - `consolidation_gap` 较大时，应把 story_memory 视为高优先级输入，即使当前章节不是高风险章节也要先消化
+- 若存在 `story_recall.emotional_focus`，必须至少保留 1 条角色情绪状态或最近转折点
+- 若存在 `chapter_intent.story_risks`，任务书中必须显式回应这些风险，禁止只摘录不执行

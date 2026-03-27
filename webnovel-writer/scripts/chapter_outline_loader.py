@@ -99,8 +99,8 @@ def _find_volume_outline_file(project_root: Path, chapter_num: int) -> Path | No
 
 def _extract_outline_section(content: str, chapter_num: int) -> str | None:
     patterns = [
-        rf"###\s*第\s*{chapter_num}\s*章[：:]\s*(.+?)(?=###\s*第\s*\d+\s*章|##\s|$)",
-        rf"###\s*第{chapter_num}章[：:]\s*(.+?)(?=###\s*第\d+章|##\s|$)",
+        rf"(###\s*第\s*{chapter_num}\s*章(?:[：:][^\n]*)?\n.+?)(?=###\s*第\s*\d+\s*章|##\s|$)",
+        rf"(###\s*第{chapter_num}章(?:[：:][^\n]*)?\n.+?)(?=###\s*第\d+章|##\s|$)",
     ]
     for pattern in patterns:
         match = re.search(pattern, content, re.DOTALL)

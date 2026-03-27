@@ -114,6 +114,22 @@ class DataModulesConfig:
     def story_memory_file(self) -> Path:
         return self.memory_dir / "story_memory.json"
 
+    @property
+    def control_dir(self) -> Path:
+        return self.webnovel_dir / "control"
+
+    @property
+    def author_intent_file(self) -> Path:
+        return self.control_dir / "author_intent.json"
+
+    @property
+    def current_focus_file(self) -> Path:
+        return self.control_dir / "current_focus.json"
+
+    @property
+    def chapter_intent_dir(self) -> Path:
+        return self.control_dir / "chapter_intents"
+
     # v5.1 引入: alias_index_file 已废弃，别名存储在 index.db aliases 表
 
     @property
@@ -256,6 +272,8 @@ class DataModulesConfig:
     )
     context_genre_profile_support_composite: bool = True
     context_genre_profile_max_genres: int = 2
+    context_emotional_arc_stale_gap: int = 6
+    context_chapter_intent_max_items: int = 3
     context_genre_profile_separators: tuple[str, ...] = (
         "+",
         "/",
@@ -323,6 +341,8 @@ class DataModulesConfig:
     def ensure_dirs(self):
         self.webnovel_dir.mkdir(parents=True, exist_ok=True)
         self.memory_dir.mkdir(parents=True, exist_ok=True)
+        self.control_dir.mkdir(parents=True, exist_ok=True)
+        self.chapter_intent_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def from_project_root(cls, project_root: str | Path) -> "DataModulesConfig":

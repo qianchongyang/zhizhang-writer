@@ -201,6 +201,70 @@ def test_context_manager_includes_story_memory_and_project_memory(temp_project):
     assert memory["story_memory"]["characters"]["萧炎"]["current_state"] == "斗王巅峰"
 
 
+def test_context_manager_builds_chapter_intent_with_current_focus_and_emotion(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎", "location": {"current": "天云宗"}},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    temp_project.current_focus_file.write_text(
+        json.dumps(
+            {
+                "title": "拉回主线",
+                "goal": "本章必须推进主线冲突",
+                "must_resolve": ["玄铁令伏笔"],
+                "hard_constraints": ["不要扩写新支线"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    temp_project.author_intent_file.write_text(
+        json.dumps({"hard_constraints": ["维持主角底层动机"]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 4,
+                "characters": {"萧炎": {"current_state": "压抑", "last_update_chapter": 4}},
+                "emotional_arcs": {
+                    "萧炎": [
+                        {
+                            "chapter": 4,
+                            "emotional_state": "压抑",
+                            "emotional_trend": "down",
+                            "trigger_event": "师门冲突",
+                        }
+                    ]
+                },
+                "plot_threads": [{"name": "玄铁令伏笔", "status": "pending", "tier": "核心"}],
+                "recent_events": [{"ch": 4, "event": "师门冲突升级"}],
+                "structured_change_ledger": [],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(10, use_snapshot=False, save_snapshot=False)
+    chapter_intent = payload["sections"]["chapter_intent"]["content"]
+    story_recall = payload["sections"]["story_recall"]["content"]
+
+    assert chapter_intent["focus_title"] == "拉回主线"
+    assert chapter_intent["chapter_goal"] == "本章必须推进主线冲突"
+    assert "玄铁令伏笔" in chapter_intent["must_resolve"]
+    assert "不要扩写新支线" in chapter_intent["hard_constraints"]
+    assert any("情绪弧线" in item for item in chapter_intent["story_risks"])
+    assert story_recall["emotional_focus"][0]["name"] == "萧炎"
+
+
 def test_context_manager_invalidation_on_story_memory_version_change(temp_project):
     state = {
         "protagonist_state": {"name": "萧炎"},
@@ -409,6 +473,62 @@ def test_context_manager_story_recall_orders_change_focus_by_tier(temp_project):
     assert recall["recall_policy"]["tier_counts"]["working"] == 1
 
 
+def test_context_manager_recalls_archive_when_outline_matches(temp_project):
+    state = {
+        "progress": {
+            "volumes_planned": [{"volume": 1, "chapters_range": "1-20"}],
+        },
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    temp_project.outline_dir.mkdir(parents=True, exist_ok=True)
+    (temp_project.outline_dir / "第1卷-详细大纲.md").write_text(
+        "### 第13章：旧玉佩线索重现\n主角需追查来历。",
+        encoding="utf-8",
+    )
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 8,
+                "last_consolidated_at": "2026-03-27T10:00:00Z",
+                "characters": {},
+                "plot_threads": [],
+                "recent_events": [],
+                "structured_change_ledger": [],
+                "chapter_snapshots": [],
+                "archive": {
+                    "plot_threads": [
+                        {"content": "旧玉佩来历", "status": "已回收", "tier": "支线", "resolved_chapter": 5}
+                    ],
+                    "recent_events": [
+                        {"ch": 5, "event": "找到旧玉佩"},
+                    ],
+                    "structured_change_ledger": [
+                        {"ch": 5, "entity_id": "yupei", "field": "来历", "old_value": "未知", "new_value": "线索出现", "memory_score": 42, "memory_tier": "working"}
+                    ],
+                },
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(13, use_snapshot=False, save_snapshot=False)
+    recall = payload["sections"]["story_recall"]["content"]
+    archive_recall = recall["archive_recall"]
+
+    assert archive_recall["plot_threads"][0]["content"] == "旧玉佩来历"
+    assert archive_recall["plot_threads"][0]["memory_tier"] == "archive"
+    assert archive_recall["recent_events"][0]["event"] == "找到旧玉佩"
+    assert archive_recall["structured_change_focus"][0]["field"] == "来历"
+
+
 def test_context_manager_applies_ranker_and_contract_meta(temp_project):
     state = {
         "protagonist_state": {"name": "萧炎"},
@@ -427,7 +547,7 @@ def test_context_manager_applies_ranker_and_contract_meta(temp_project):
     manager = ContextManager(temp_project)
     payload = manager.build_context(4, use_snapshot=False, save_snapshot=False)
 
-    assert payload["meta"].get("context_contract_version") == "v2"
+    assert payload["meta"].get("context_contract_version") == "v3"
     recent_meta = payload["sections"]["core"]["content"]["recent_meta"]
     if recent_meta:
         assert recent_meta[0]["chapter"] == 3

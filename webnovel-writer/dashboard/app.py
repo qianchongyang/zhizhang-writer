@@ -105,11 +105,14 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
             "strand_tracker": state.get("strand_tracker") if isinstance(state, dict) else {},
             "chapter": chapter,
             "chapter_outline": "",
+            "chapter_intent": {},
             "story_recall": {},
             "memory_health": {},
             "writing_guidance": {},
             "reader_signal": {},
             "genre_profile": {},
+            "style_fatigue": {},
+            "workflow_trace": _load_workflow_trace(),
             "diagnostics": {"degraded": False, "reason": ""},
         }
 
@@ -127,6 +130,7 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
             sections = context.get("sections") or {}
             core = sections.get("core", {}).get("content") or {}
             story_recall = sections.get("story_recall", {}).get("content") or {}
+            chapter_intent = sections.get("chapter_intent", {}).get("content") or {}
             writing_guidance = sections.get("writing_guidance", {}).get("content") or {}
             reader_signal = sections.get("reader_signal", {}).get("content") or {}
             genre_profile = sections.get("genre_profile", {}).get("content") or {}
@@ -136,11 +140,13 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
                     "chapter_outline": str(core.get("chapter_outline") or ""),
                     "recent_summaries": core.get("recent_summaries") or [],
                     "recent_meta": core.get("recent_meta") or [],
+                    "chapter_intent": chapter_intent,
                     "story_recall": story_recall,
                     "writing_guidance": writing_guidance,
                     "reader_signal": reader_signal,
                     "genre_profile": genre_profile,
                     "memory_health": _build_memory_health(state, story_recall),
+                    "style_fatigue": _build_style_fatigue_signal(state),
                 }
             )
         except Exception as exc:  # pragma: no cover - dashboard should degrade gracefully
@@ -148,10 +154,14 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
             fallback_recall = _build_fallback_story_recall(state, story_memory)
             summary["story_recall"] = fallback_recall
             summary["memory_health"] = _build_memory_health(state, fallback_recall)
+            summary["chapter_intent"] = _build_fallback_chapter_intent(state, chapter, summary["chapter_outline"], fallback_recall)
+            summary["style_fatigue"] = _build_style_fatigue_signal(state)
             summary["diagnostics"] = {"degraded": True, "reason": str(exc)}
 
         if not summary.get("chapter_outline"):
             summary["chapter_outline"] = _fallback_chapter_outline(root, chapter)
+        if not summary.get("chapter_intent"):
+            summary["chapter_intent"] = _build_fallback_chapter_intent(state, chapter, summary["chapter_outline"], summary.get("story_recall") or {})
 
         return summary
 
@@ -530,6 +540,17 @@ def _load_json_optional(path: Path) -> Dict[str, Any]:
     return raw if isinstance(raw, dict) else {}
 
 
+def _load_workflow_trace() -> Dict[str, Any]:
+    workflow_state = _load_json_optional(_webnovel_dir() / "workflow_state.json")
+    current_task = workflow_state.get("current_task") if isinstance(workflow_state, dict) else {}
+    if isinstance(current_task, dict) and current_task.get("workflow_trace"):
+        return dict(current_task.get("workflow_trace") or {})
+    last_stable = workflow_state.get("last_stable_state") if isinstance(workflow_state, dict) else {}
+    if isinstance(last_stable, dict) and last_stable.get("workflow_trace"):
+        return dict(last_stable.get("workflow_trace") or {})
+    return {}
+
+
 def _fallback_chapter_outline(project_root: Path, chapter: int) -> str:
     try:
         from chapter_outline_loader import load_chapter_outline
@@ -546,6 +567,7 @@ def _build_memory_health(state: Dict[str, Any], story_recall: Dict[str, Any]) ->
     priority_foreshadowing = story_recall.get("priority_foreshadowing") or []
     recent_events = story_recall.get("recent_events") or []
     character_focus = story_recall.get("character_focus") or []
+    emotional_focus = story_recall.get("emotional_focus") or []
     structured_change_focus = story_recall.get("structured_change_focus") or []
     archive_recall = story_recall.get("archive_recall") or {}
     archive_counts = {
@@ -576,10 +598,62 @@ def _build_memory_health(state: Dict[str, Any], story_recall: Dict[str, Any]) ->
         "priority_foreshadowing_count": len(priority_foreshadowing),
         "recent_events_count": len(recent_events),
         "character_focus_count": len(character_focus),
+        "emotional_focus_count": len(emotional_focus),
         "structured_change_count": len(structured_change_focus),
         "archive_available": bool(archive_recall),
         "archive_counts": archive_counts,
         "memory_stale": stale,
+    }
+
+
+def _build_fallback_chapter_intent(
+    state: Dict[str, Any],
+    chapter: int,
+    chapter_outline: str,
+    story_recall: Dict[str, Any],
+) -> Dict[str, Any]:
+    must_resolve = [
+        str(item.get("name") or item.get("content") or item.get("event") or "").strip()
+        for item in (story_recall.get("priority_foreshadowing") or [])[:3]
+        if isinstance(item, dict)
+    ]
+    story_risks: list[str] = []
+    recall_policy = story_recall.get("recall_policy") or {}
+    consolidation_gap = int(recall_policy.get("consolidation_gap") or 0)
+    if consolidation_gap >= 3:
+        story_risks.append(f"记忆整理滞后 {consolidation_gap} 章")
+    if len(must_resolve) >= 3:
+        story_risks.append("高优先级伏笔较多")
+    return {
+        "chapter": chapter,
+        "focus_title": "",
+        "chapter_goal": str(chapter_outline or "").strip()[:120],
+        "must_resolve": [item for item in must_resolve if item],
+        "priority_memory": [],
+        "story_risks": story_risks,
+        "hard_constraints": [],
+    }
+
+
+def _build_style_fatigue_signal(state: Dict[str, Any]) -> Dict[str, Any]:
+    chapter_meta = (state.get("chapter_meta") or {}) if isinstance(state, dict) else {}
+    if not isinstance(chapter_meta, dict):
+        return {"count": 0, "status": "clean", "issues": []}
+    latest_key = sorted(chapter_meta.keys())[-1] if chapter_meta else ""
+    latest_meta = chapter_meta.get(latest_key) or {}
+    issues = latest_meta.get("style_fatigue") or []
+    if not isinstance(issues, list):
+        issues = []
+    count = len(issues)
+    status = "clean"
+    if count >= 3:
+        status = "warn"
+    elif count > 0:
+        status = "notice"
+    return {
+        "count": count,
+        "status": status,
+        "issues": issues[:5],
     }
 
 
@@ -598,6 +672,7 @@ def _build_fallback_story_recall(state: Dict[str, Any], story_memory: Dict[str, 
         else []
     )
     archive = story_memory.get("archive") if isinstance(story_memory.get("archive"), dict) else {}
+    emotional_arcs = story_memory.get("emotional_arcs") if isinstance(story_memory.get("emotional_arcs"), dict) else {}
 
     protagonist_name = ""
     protagonist_state = state.get("protagonist_state", {}) if isinstance(state, dict) else {}
@@ -634,6 +709,24 @@ def _build_fallback_story_recall(state: Dict[str, Any], story_memory: Dict[str, 
             }
         )
 
+    emotional_focus = []
+    for name in [protagonist_name] + [str(item.get("name") or "") for item in character_focus]:
+        rows = emotional_arcs.get(name) or []
+        if not isinstance(rows, list) or not rows:
+            continue
+        latest = rows[-1]
+        if not isinstance(latest, dict):
+            continue
+        emotional_focus.append(
+            {
+                "name": name,
+                "emotional_state": latest.get("emotional_state", ""),
+                "emotional_trend": latest.get("emotional_trend", "stable"),
+                "trigger_event": latest.get("trigger_event", ""),
+                "chapter": latest.get("chapter", 0),
+            }
+        )
+
     structured_change_focus = []
     for item in change_ledger[:5]:
         if not isinstance(item, dict):
@@ -666,7 +759,7 @@ def _build_fallback_story_recall(state: Dict[str, Any], story_memory: Dict[str, 
             "mode": "normal" if not story_memory else "boost",
             "should_recall_story_memory": bool(story_memory),
             "reasons": ["fallback_story_memory"],
-            "signal_count": len(active_foreshadowing) + len(character_focus) + len(structured_change_focus) + len(recent_events),
+            "signal_count": len(active_foreshadowing) + len(character_focus) + len(structured_change_focus) + len(recent_events) + len(emotional_focus),
             "consolidation_gap": max(0, int((state.get("progress") or {}).get("current_chapter") or 0) - int(story_memory.get("last_consolidated_chapter") or 0)),
             "tier_counts": {
                 "consolidated": len([item for item in structured_change_focus if str(item.get("memory_tier")) == "consolidated"]),
@@ -677,6 +770,7 @@ def _build_fallback_story_recall(state: Dict[str, Any], story_memory: Dict[str, 
         "priority_foreshadowing": active_foreshadowing[:5],
         "recent_events": recent_events[-5:],
         "character_focus": character_focus[:5],
+        "emotional_focus": emotional_focus[:3],
         "structured_change_focus": structured_change_focus[:5],
         "archive_recall": archive_recall if any(archive_recall.values()) else {},
     }

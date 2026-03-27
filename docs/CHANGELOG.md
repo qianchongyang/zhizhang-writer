@@ -4,6 +4,35 @@
 
 ---
 
+## v5.17.0 (2026-03-27)
+
+**InkOS 启发链路收口**
+
+### 核心升级
+- 新增控制面运行时对象：`author_intent`、`current_focus`、`chapter_intent`
+- `ContextManager` 现在会稳定产出本章任务书：`chapter_goal / must_resolve / priority_memory / story_risks / hard_constraints`
+- `story_memory` 新增独立 `emotional_arcs` 层，写前召回会带出当前角色情绪状态和最近转折
+- `Data Agent` 数据链支持 `observer_output -> reflector_delta -> validator -> state_manager` 的渐进式两阶段模式
+- `workflow_manager` 新增 `workflow_trace`，可在 dashboard 与恢复链路中追踪当前阶段
+- Dashboard summary 接入任务书、语言疲劳信号和 workflow trace，首页能直接看到本章 focus 与风险
+
+### 审查与质量
+- 新增轻量去 AI 味信号 `style_fatigue`，覆盖重复表达、模板化动作和总结式叙述
+- `status_reporter` 现在会显示情绪弧线角色数、语言疲劳告警数和情绪长期未更新提示
+
+### 文档与契约
+- 新增运行时模板：`author_intent.md`、`current_focus.md`、`chapter-intent.md`
+- 更新 `context-agent`、`data-agent` 和 `Step 1.5 Contract`，把控制面、情绪弧线、Observer/Reflector 契约写入文档
+
+### 验证
+- `test_context_manager.py`
+- `test_extract_chapter_context.py`
+- `test_state_manager_extra.py`
+- `test_status_reporter.py`
+- `test_workflow_manager.py`
+- `dashboard/tests/test_app.py`
+- `dashboard/frontend npm run build`
+
 ## v5.13.3 (2026-03-27)
 
 **记忆页页内快跳**

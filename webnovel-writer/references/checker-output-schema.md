@@ -166,3 +166,83 @@ Step 3 完成后，输出汇总 JSON：
   }
 }
 ```
+
+## 总分汇总扩展
+
+### 新增字段
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `total_score` | int | 否 | 总分 (0-80)，由汇总层计算 |
+| `grade` | string | 否 | 等级：优秀/合格/需修改/不合格 |
+| `dimension_scores` | object | 否 | 各维度得分 |
+| `weighted_score` | float | 否 | 加权总分 |
+
+### 各维度权重配置
+
+| 维度 | 权重 | 满分 |
+|------|------|------|
+| 追读力 (Reader Pull) | 20% | 16 分 |
+| 爽点密度 (High-point) | 20% | 16 分 |
+| 节奏 (Pacing) | 15% | 12 分 |
+| 连贯性 (Consistency) | 20% | 16 分 |
+| OOC 检查 | 15% | 12 分 |
+| 叙事连贯 (Continuity) | 10% | 8 分 |
+| **合计** | 100% | 80 分 |
+
+### 交付等级
+
+| 分数 | 等级 | 动作 |
+|------|------|------|
+| ≥70 | 优秀 | 可直接交付 |
+| 60-69 | 合格 | 轻微修改后交付 |
+| 50-59 | 需修改 | 主要问题需修复 |
+| <50 | 不合格 | 必须大改 |
+
+### 汇总格式扩展
+
+在 `汇总格式` 部分扩展：
+
+```json
+{
+  "chapter": 100,
+  "checkers": {
+    "reader-pull-checker": {"score": 85, "pass": true, "critical": 0, "high": 1},
+    "high-point-checker": {"score": 80, "pass": true, "critical": 0, "high": 0},
+    "consistency-checker": {"score": 90, "pass": true, "critical": 0, "high": 0},
+    "ooc-checker": {"score": 75, "pass": true, "critical": 0, "high": 1},
+    "continuity-checker": {"score": 85, "pass": true, "critical": 0, "high": 0},
+    "pacing-checker": {"score": 80, "pass": true, "critical": 0, "high": 0}
+  },
+  "overall": {
+    "score": 82.5,
+    "total_score": 66,
+    "grade": "合格",
+    "dimension_scores": {
+      "追读力": 16,
+      "爽点密度": 16,
+      "节奏": 12,
+      "连贯性": 16,
+      "OOC": 12,
+      "叙事连贯": 8
+    },
+    "pass": true,
+    "critical_total": 0,
+    "high_total": 2,
+    "can_proceed": true
+  }
+}
+```
+
+**计算公式**：
+```python
+total_score = (
+    reader_pull_score * 0.20 +
+    high_point_score * 0.20 +
+    pacing_score * 0.15 +
+    consistency_score * 0.20 +
+    ooc_score * 0.15 +
+    continuity_score * 0.10
+)
+```
+注意：checker 输出的是 0-100 分，需要转换为 80 分制权重分

@@ -132,6 +132,27 @@ def test_build_chapter_context_payload_includes_contract_sections(tmp_path):
     summaries_dir = cfg.webnovel_dir / "summaries"
     summaries_dir.mkdir(parents=True, exist_ok=True)
     (summaries_dir / "ch0002.md").write_text("## 剧情摘要\n上一章总结", encoding="utf-8")
+    (cfg.webnovel_dir / "project_memory.json").write_text(
+        json.dumps({"patterns": [{"pattern_type": "hook", "description": "危机钩"}]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    (cfg.webnovel_dir / "memory").mkdir(parents=True, exist_ok=True)
+    (cfg.webnovel_dir / "memory" / "story_memory.json").write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 2,
+                "last_consolidated_at": "2026-03-27T10:00:00Z",
+                "characters": {"主角": {"current_state": "闭关", "last_update_chapter": 2}},
+                "plot_threads": [{"name": "玄铁令", "status": "pending", "urgency": 88}],
+                "recent_events": [{"ch": 2, "event": "突破"}],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
 
     outline_dir = tmp_path / "大纲"
     outline_dir.mkdir(parents=True, exist_ok=True)
@@ -153,6 +174,8 @@ def test_build_chapter_context_payload_includes_contract_sections(tmp_path):
     payload = build_chapter_context_payload(tmp_path, 3)
     assert payload["context_contract_version"] == "v2"
     assert payload.get("context_weight_stage") in {"early", "mid", "late"}
+    assert payload["memory"]["project_memory"]["patterns"][0]["description"] == "危机钩"
+    assert payload["story_recall"]["priority_foreshadowing"][0]["name"] == "玄铁令"
     assert "writing_guidance" in payload
     assert isinstance(payload["writing_guidance"].get("guidance_items"), list)
     assert isinstance(payload["writing_guidance"].get("checklist"), list)
@@ -177,6 +200,13 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
         "state_summary": "状态",
         "context_contract_version": "v2",
         "context_weight_stage": "early",
+        "story_recall": {
+            "last_consolidated_chapter": 9,
+            "priority_foreshadowing": [{"name": "玄铁令", "urgency": 88}],
+            "recent_events": [{"ch": 9, "event": "突破"}],
+            "character_focus": [{"name": "萧炎", "current_state": "斗王", "last_update_chapter": 9}],
+            "structured_change_focus": [{"ch": 9, "entity_id": "xiaoyan", "field": "灵石", "change_kind": "resource_change", "old_value": "100", "new_value": "150", "delta": 50}],
+        },
         "reader_signal": {"review_trend": {"overall_avg": 72}, "low_score_ranges": [{"start_chapter": 8, "end_chapter": 9}]},
         "genre_profile": {
             "genre": "xuanhuan",
@@ -218,6 +248,9 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
     }
 
     text = _render_text(payload)
+    assert "## 高优先级召回" in text
+    assert "玄铁令" in text
+    assert "结构化变化账本" in text
     assert "## 写作执行建议" in text
     assert "先修低分" in text
     assert "## Contract (v2)" in text

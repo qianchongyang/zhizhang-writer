@@ -4,6 +4,48 @@
 
 ---
 
+## v5.9.0 (2026-03-27)
+
+**通用记忆引擎升级**
+
+### 核心升级
+- 新增 `story_memory.json` 作为跨章节稳定记忆层
+- 引入 `structured_change_ledger` 记录通用结构化变化，不再限定为数值变化
+- 增加 `change_kind / memory_score / memory_tier`，用于记忆分层与写前召回排序
+- 写前上下文、章节上下文输出和健康报告统一接入记忆层
+
+### 兼容性
+- 保留 `numeric_ledger` / `numeric_change_id` 作为旧数据兼容入口
+- 旧项目可直接升级，不需要重建全部底座
+
+### 文档更新
+- 更新 README 版本说明
+- 更新架构文档与命令文档中的记忆层说明
+
+---
+
+## v5.8.0 (2026-03-27)
+
+**NovelAI 调研与音频封面预留**
+
+### 调研成果
+- 研究了 [jacobbeasley/novelai](https://github.com/jacobbeasley/novelai) 的小说撰写流程
+- 分析了 Jinja2 模板分步执行、JSON 自修复、重试机制等核心设计
+- 评估了 MiniMAX TTS HD（5小时/月，11000次）用于音频书生成的可行性
+
+### 可借鉴能力（待实现）
+- JSON 自修复：让 LLM 直接修正设定冲突（而非只报错）
+- Refine 反向利用：把 Checker 问题列表变成优化指令
+- 重试机制：审查/润色失败时自动重试
+- 音频书生成：基于 MiniMAX TTS 的多角色音色 + 背景音乐
+
+### 音频封面预留
+- MiniMAX TTS HD（speech-02-hd）：<10,000字符/次，适合小说正文朗读
+- MiniMAX Music-2.5：最长5分钟，可生成氛围音乐/片头曲
+- MiniMAX image-01：120次/月，可生成章节封面图
+
+---
+
 ## v5.7.0 (2026-03-27)
 
 **字数检查系统 + 质量总分 + references 扩展**

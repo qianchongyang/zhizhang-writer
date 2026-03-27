@@ -311,6 +311,8 @@ def _load_contract_context(project_root: Path, chapter_num: int) -> Dict[str, An
     return {
         "context_contract_version": (payload.get("meta") or {}).get("context_contract_version"),
         "context_weight_stage": (payload.get("meta") or {}).get("context_weight_stage"),
+        "memory": (sections.get("memory") or {}).get("content", {}),
+        "story_recall": (sections.get("story_recall") or {}).get("content", {}),
         "reader_signal": (sections.get("reader_signal") or {}).get("content", {}),
         "genre_profile": (sections.get("genre_profile") or {}).get("content", {}),
         "writing_guidance": (sections.get("writing_guidance") or {}).get("content", {}),
@@ -329,6 +331,7 @@ def build_chapter_context_payload(project_root: Path, chapter_num: int) -> Dict[
     state_summary = extract_state_summary(project_root)
     contract_context = _load_contract_context(project_root, chapter_num)
     rag_assist = _load_rag_assist(project_root, chapter_num, outline)
+    memory_section = contract_context.get("memory", {}) if isinstance(contract_context, dict) else {}
 
     return {
         "chapter": chapter_num,
@@ -337,9 +340,13 @@ def build_chapter_context_payload(project_root: Path, chapter_num: int) -> Dict[
         "state_summary": state_summary,
         "context_contract_version": contract_context.get("context_contract_version"),
         "context_weight_stage": contract_context.get("context_weight_stage"),
+        "memory": contract_context.get("memory", {}),
+        "story_recall": contract_context.get("story_recall", {}),
         "reader_signal": contract_context.get("reader_signal", {}),
         "genre_profile": contract_context.get("genre_profile", {}),
         "writing_guidance": contract_context.get("writing_guidance", {}),
+        "story_memory": memory_section.get("story_memory", {}),
+        "story_memory_meta": memory_section.get("story_memory_meta", {}),
         "rag_assist": rag_assist,
     }
 
@@ -370,6 +377,101 @@ def _render_text(payload: Dict[str, Any]) -> str:
     lines.append("")
     lines.append(str(payload.get("state_summary", "")))
     lines.append("")
+
+    story_recall = payload.get("story_recall") or {}
+    if story_recall:
+        lines.append("## 高优先级召回")
+        lines.append("")
+        if story_recall.get("last_consolidated_chapter") is not None:
+            lines.append(f"- last_consolidated_chapter: {story_recall.get('last_consolidated_chapter')}")
+        priority_foreshadowing = story_recall.get("priority_foreshadowing") or []
+        if priority_foreshadowing:
+            lines.append("- 未回收伏笔:")
+            for row in priority_foreshadowing[:5]:
+                if not isinstance(row, dict):
+                    continue
+                label = str(row.get("name") or row.get("content") or row.get("event") or "未命名伏笔")
+                urgency = row.get("urgency")
+                if urgency is not None:
+                    lines.append(f"  - {label}（urgency={urgency}）")
+                else:
+                    lines.append(f"  - {label}")
+        character_focus = story_recall.get("character_focus") or []
+        if character_focus:
+            lines.append("- 关键人物:")
+            for row in character_focus[:5]:
+                if not isinstance(row, dict):
+                    continue
+                name = str(row.get("name") or "未命名角色")
+                state_text = str(row.get("current_state") or "—")
+                last_update = row.get("last_update_chapter") or "—"
+                lines.append(f"  - {name}: {state_text}（Ch.{last_update}）")
+        change_focus = story_recall.get("structured_change_focus") or []
+        if change_focus:
+            lines.append("- 结构化变化账本:")
+            for row in change_focus[:5]:
+                if not isinstance(row, dict):
+                    continue
+                entity_id = str(row.get("entity_id") or "—")
+                field = str(row.get("field") or "—")
+                delta = row.get("delta")
+                old_value = row.get("old_value")
+                new_value = row.get("new_value")
+                change_kind = str(row.get("change_kind") or "state_change")
+                memory_score = row.get("memory_score")
+                memory_tier = row.get("memory_tier")
+                lines.append(f"  - [{change_kind}/{memory_tier}/score={memory_score}] {entity_id}.{field}: {old_value} -> {new_value}（Δ{delta}）")
+        recent_events = story_recall.get("recent_events") or []
+        if recent_events:
+            lines.append("- 最近事件:")
+            for row in recent_events[:5]:
+                if not isinstance(row, dict):
+                    continue
+                ch = row.get("ch") or row.get("chapter") or "?"
+                event = row.get("event") or row.get("content") or "—"
+                lines.append(f"  - Ch.{ch}: {event}")
+        lines.append("")
+
+    story_memory = payload.get("story_memory") or {}
+    story_memory_meta = payload.get("story_memory_meta") or {}
+    if story_memory_meta or story_memory:
+        lines.append("## 故事记忆")
+        lines.append("")
+        if story_memory_meta:
+            version = story_memory_meta.get("version") or "unknown"
+            chapter = story_memory_meta.get("last_consolidated_chapter") or 0
+            updated_at = story_memory_meta.get("last_consolidated_at") or ""
+            lines.append(f"- version: {version}")
+            lines.append(f"- last_consolidated_chapter: {chapter}")
+            if updated_at:
+                lines.append(f"- last_consolidated_at: {updated_at}")
+        characters = story_memory.get("characters") or {}
+        if characters:
+            lines.append("- 角色摘要:")
+            for name, info in list(characters.items())[:5]:
+                if not isinstance(info, dict):
+                    continue
+                current_state = info.get("current_state") or "—"
+                last_update = info.get("last_update_chapter") or "—"
+                lines.append(f"  - {name}: {current_state}（Ch.{last_update}）")
+        plot_threads = story_memory.get("plot_threads") or []
+        if plot_threads:
+            pending_threads = [row for row in plot_threads if isinstance(row, dict) and str(row.get("status") or "").lower() in {"pending", "active", "未回收"}]
+            if pending_threads:
+                lines.append("- 未回收伏笔:")
+                for row in pending_threads[:5]:
+                    content = str(row.get("name") or row.get("event") or row.get("content") or "未命名伏笔")
+                    lines.append(f"  - {content}")
+        recent_events = story_memory.get("recent_events") or []
+        if recent_events:
+            lines.append("- 近章重大事件:")
+            for row in recent_events[:5]:
+                if not isinstance(row, dict):
+                    continue
+                ch = row.get("ch") or row.get("chapter") or "?"
+                event = row.get("event") or row.get("content") or "—"
+                lines.append(f"  - Ch.{ch}: {event}")
+        lines.append("")
 
     contract_version = payload.get("context_contract_version")
     if contract_version:
@@ -533,4 +635,3 @@ if __name__ == "__main__":
     if sys.platform == "win32":
         enable_windows_utf8_stdio()
     main()
-

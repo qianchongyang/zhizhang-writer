@@ -28,6 +28,13 @@ import filelock
 
 from .config import get_config
 from .observability import safe_append_perf_timing, safe_log_tool_call
+from .state_validator import (
+    normalize_story_memory,
+    normalize_foreshadowing_status,
+    normalize_foreshadowing_tier,
+    infer_change_kind,
+    score_change_significance,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -1385,7 +1392,465 @@ class StateManager:
         # 同步主角状态（entities_v3 → protagonist_state）
         self.sync_protagonist_from_entity()
 
+        story_memory_warning = self._update_story_memory(chapter, result)
+        if story_memory_warning:
+            warnings.append(story_memory_warning)
+
         return warnings
+
+    def _story_memory_path(self) -> Path:
+        return getattr(self.config, "story_memory_file", self.config.webnovel_dir / "memory" / "story_memory.json")
+
+    def _default_story_memory(self) -> Dict[str, Any]:
+        return {
+            "version": "1",
+            "last_consolidated_chapter": 0,
+            "last_consolidated_at": "",
+            "last_updated_at": "",
+            "characters": {},
+            "plot_threads": [],
+            "recent_events": [],
+            "structured_change_ledger": [],
+            "chapter_snapshots": [],
+            "meta": {"source": "state_manager"},
+        }
+
+    def _load_story_memory(self) -> Dict[str, Any]:
+        path = self._story_memory_path()
+        if not path.exists():
+            return normalize_story_memory(self._default_story_memory())
+
+        raw = read_json_safe(path, default={})
+        if not isinstance(raw, dict):
+            return normalize_story_memory(self._default_story_memory())
+
+        return normalize_story_memory(raw)
+
+    def _stringify_story_value(self, value: Any) -> str:
+        if isinstance(value, (dict, list)):
+            try:
+                return json.dumps(value, ensure_ascii=False, sort_keys=True)
+            except Exception:
+                return str(value)
+        return str(value)
+
+    def _summarize_protagonist_story_state(self) -> str:
+        protagonist = self._state.get("protagonist_state", {})
+        if not isinstance(protagonist, dict):
+            return ""
+
+        parts: List[str] = []
+        power = protagonist.get("power")
+        if isinstance(power, dict):
+            realm = power.get("realm")
+            layer = power.get("layer")
+            if realm:
+                parts.append(str(realm))
+            if layer not in (None, ""):
+                parts.append(f"{layer}层")
+
+        location = protagonist.get("location")
+        if isinstance(location, dict):
+            current = location.get("current")
+            if current:
+                parts.append(f"地点:{current}")
+        elif location:
+            parts.append(f"地点:{location}")
+
+        golden_finger = protagonist.get("golden_finger")
+        if isinstance(golden_finger, dict):
+            gf_name = golden_finger.get("name")
+            gf_level = golden_finger.get("level")
+            if gf_name:
+                parts.append(f"金手指:{gf_name}")
+            if gf_level not in (None, ""):
+                parts.append(f"Lv.{gf_level}")
+
+        if not parts and protagonist.get("name"):
+            parts.append(str(protagonist.get("name")))
+        return "，".join(parts)
+
+    def _summarize_character_states(self, states: Any) -> str:
+        if not isinstance(states, dict):
+            return self._stringify_story_value(states)
+
+        parts: List[str] = []
+        for state_type, state_data in states.items():
+            if isinstance(state_data, dict):
+                value = state_data.get("value", [])
+            else:
+                value = state_data
+            if isinstance(value, list):
+                value_text = " / ".join(str(item) for item in value if item not in (None, ""))
+            else:
+                value_text = self._stringify_story_value(value)
+            if value_text:
+                parts.append(f"{state_type}:{value_text}")
+        return "；".join(parts) if parts else ""
+
+    def _append_unique_story_events(self, target: List[Dict[str, Any]], events: List[Dict[str, Any]], limit: int = 50) -> None:
+        existing = {
+            (
+                int(item.get("ch") or 0),
+                str(item.get("event") or ""),
+                str(item.get("type") or ""),
+                str(item.get("entity_id") or ""),
+                str(item.get("field") or ""),
+            )
+            for item in target
+            if isinstance(item, dict)
+        }
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            key = (
+                int(event.get("ch") or 0),
+                str(event.get("event") or ""),
+                str(event.get("type") or ""),
+                str(event.get("entity_id") or ""),
+                str(event.get("field") or ""),
+            )
+            if key in existing:
+                continue
+            target.append(event)
+            existing.add(key)
+        if len(target) > limit:
+            del target[:-limit]
+
+    def _trim_story_milestones(self, milestones: List[Dict[str, Any]], limit: int = 10) -> List[Dict[str, Any]]:
+        if len(milestones) <= limit:
+            return milestones
+        return milestones[-limit:]
+
+    def _parse_change_story_value(self, value: Any) -> Optional[float]:
+        if value is None or isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            text = value.strip()
+            if not text:
+                return None
+            import re
+
+            match = re.search(r"-?\d+(?:\.\d+)?", text)
+            if match:
+                try:
+                    return float(match.group(0))
+                except ValueError:
+                    return None
+        return None
+
+    def _build_change_ledger_entry(self, chapter: int, change: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        if not isinstance(change, dict):
+            return None
+
+        entity_id = str(change.get("entity_id") or "").strip()
+        field = str(change.get("field") or "").strip()
+        old_value = change.get("old", change.get("old_value"))
+        new_value = change.get("new", change.get("new_value"))
+        old_numeric = self._parse_change_story_value(old_value)
+        new_numeric = self._parse_change_story_value(new_value)
+        inference = score_change_significance(change)
+        change_kind = str(
+            change.get("change_kind")
+            or change.get("kind")
+            or inference.get("change_kind")
+            or infer_change_kind(change)
+        ).strip() or "state_change"
+
+        entry = {
+            "ch": chapter,
+            "entity_id": entity_id,
+            "field": field,
+            "old_value": old_value,
+            "new_value": new_value,
+            "change_kind": change_kind,
+            "reason": str(change.get("reason") or ""),
+            "source_of_truth": "index.db",
+            "confidence": float(change.get("confidence") or 1.0),
+            "type": str(change.get("type") or change_kind),
+            "memory_score": inference.get("memory_score", 0.0),
+            "memory_tier": inference.get("memory_tier", "working"),
+            "memory_reasons": list(inference.get("reasons") or []),
+            "should_consolidate": bool(inference.get("should_consolidate")),
+        }
+        if old_numeric is not None:
+            entry["old_numeric"] = old_numeric
+        if new_numeric is not None:
+            entry["new_numeric"] = new_numeric
+        if old_numeric is not None and new_numeric is not None:
+            entry["delta"] = round(new_numeric - old_numeric, 6)
+        return entry
+
+    def _append_unique_change_ledger(self, target: List[Dict[str, Any]], entries: List[Dict[str, Any]], limit: int = 50) -> None:
+        existing = {
+            (
+                int(item.get("ch") or 0),
+                str(item.get("entity_id") or ""),
+                str(item.get("field") or ""),
+                str(item.get("new_value") or ""),
+                str(item.get("change_kind") or ""),
+                str(item.get("type") or ""),
+            )
+            for item in target
+            if isinstance(item, dict)
+        }
+        for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            key = (
+                int(entry.get("ch") or 0),
+                str(entry.get("entity_id") or ""),
+                str(entry.get("field") or ""),
+                str(entry.get("new_value") or ""),
+                str(entry.get("change_kind") or ""),
+                str(entry.get("type") or ""),
+            )
+            if key in existing:
+                continue
+            target.append(entry)
+            existing.add(key)
+        if len(target) > limit:
+            del target[:-limit]
+
+    def _match_foreshadowing_item(self, item: Dict[str, Any], update: Dict[str, Any]) -> bool:
+        item_id = str(item.get("story_memory_id") or item.get("foreshadowing_id") or "").strip()
+        update_id = str(
+            update.get("story_memory_id")
+            or update.get("foreshadowing_id")
+            or update.get("id")
+            or ""
+        ).strip()
+        if item_id and update_id and item_id == update_id:
+            return True
+
+        item_content = str(item.get("content") or item.get("name") or item.get("event") or "").strip()
+        update_content = str(update.get("content") or update.get("name") or update.get("event") or "").strip()
+        if item_content and update_content and item_content == update_content:
+            return True
+        return False
+
+    def _apply_foreshadowing_updates(
+        self,
+        plot_threads: Dict[str, Any],
+        updates: List[Dict[str, Any]],
+        chapter: int,
+    ) -> List[Dict[str, Any]]:
+        foreshadowing = plot_threads.get("foreshadowing", [])
+        if not isinstance(foreshadowing, list) or not updates:
+            return []
+
+        applied: List[Dict[str, Any]] = []
+        for update in updates:
+            if not isinstance(update, dict):
+                continue
+            normalized_status = normalize_foreshadowing_status(update.get("status"))
+            normalized_tier = normalize_foreshadowing_tier(update.get("tier"))
+            matched = False
+            for item in foreshadowing:
+                if not isinstance(item, dict):
+                    continue
+                if not self._match_foreshadowing_item(item, update):
+                    continue
+                item["status"] = normalized_status
+                item["tier"] = normalized_tier
+                item["updated_at_chapter"] = chapter
+                item["updated_at"] = datetime.now().isoformat()
+                if normalized_status == "已回收":
+                    item["resolved_chapter"] = int(update.get("resolved_chapter") or chapter)
+                if update.get("note"):
+                    item["note"] = str(update.get("note"))
+                if update.get("confidence") is not None:
+                    item["confidence"] = float(update.get("confidence") or 1.0)
+                matched = True
+                applied.append(
+                    {
+                        "ch": chapter,
+                        "event": f"伏笔状态更新: {item.get('content') or item.get('name') or '未命名'} -> {normalized_status}",
+                        "type": "foreshadowing_status",
+                        "foreshadowing_id": item.get("foreshadowing_id") or item.get("story_memory_id") or "",
+                    }
+                )
+                break
+            if not matched and normalized_status == "已回收":
+                new_item = {
+                    "content": str(update.get("content") or update.get("name") or update.get("event") or "").strip(),
+                    "status": normalized_status,
+                    "tier": normalized_tier,
+                    "resolved_chapter": int(update.get("resolved_chapter") or chapter),
+                    "updated_at_chapter": chapter,
+                    "updated_at": datetime.now().isoformat(),
+                    "source_of_truth": str(update.get("source_of_truth") or "story_memory"),
+                    "confidence": float(update.get("confidence") or 1.0),
+                }
+                if new_item["content"]:
+                    foreshadowing.append(new_item)
+                    applied.append(
+                        {
+                            "ch": chapter,
+                            "event": f"伏笔状态更新: {new_item['content']} -> {normalized_status}",
+                            "type": "foreshadowing_status",
+                        }
+                    )
+        plot_threads["foreshadowing"] = foreshadowing
+        return applied
+
+    def _update_story_memory(self, chapter: int, result: Dict[str, Any]) -> Optional[str]:
+        try:
+            now = datetime.now().isoformat()
+            memory = self._load_story_memory()
+            memory["last_updated_at"] = now
+            meta = memory.setdefault("meta", {})
+            if isinstance(meta, dict):
+                meta["source"] = "state_manager"
+                meta["last_processed_chapter"] = chapter
+                meta["updated_at"] = now
+
+            # 角色记忆：主角 + result 中的 character_states
+            characters = memory.setdefault("characters", {})
+            protagonist_name = ""
+            protagonist_state = self._state.get("protagonist_state", {})
+            if isinstance(protagonist_state, dict):
+                protagonist_name = str(protagonist_state.get("name") or "").strip()
+            protagonist_summary = self._summarize_protagonist_story_state()
+            if protagonist_name:
+                protagonist_entry = characters.setdefault(
+                    protagonist_name,
+                    {"current_state": "", "last_update_chapter": 0, "milestones": []},
+                )
+                protagonist_entry["current_state"] = protagonist_summary
+                protagonist_entry["last_update_chapter"] = chapter
+                if chapter % 5 == 0:
+                    milestone_event = self._build_story_milestone(chapter, result, protagonist_summary)
+                    if milestone_event:
+                        milestones = protagonist_entry.setdefault("milestones", [])
+                        milestones.append(milestone_event)
+                        protagonist_entry["milestones"] = self._trim_story_milestones(milestones)
+
+            for character_id, states in (result.get("character_states") or {}).items():
+                character_key = str(character_id or "").strip()
+                if not character_key:
+                    continue
+                summary = self._summarize_character_states(states)
+                entry = characters.setdefault(
+                    character_key,
+                    {"current_state": "", "last_update_chapter": 0, "milestones": []},
+                )
+                if summary:
+                    entry["current_state"] = summary
+                entry["last_update_chapter"] = chapter
+                if chapter % 5 == 0 and summary:
+                    milestones = entry.setdefault("milestones", [])
+                    milestones.append({"ch": chapter, "event": summary})
+                    entry["milestones"] = self._trim_story_milestones(milestones)
+
+            # 事件记忆：状态变化 + 章节结尾信息
+            recent_events = list(memory.get("recent_events") or [])
+            change_ledger = list(memory.get("structured_change_ledger") or memory.get("numeric_ledger") or [])
+            new_events: List[Dict[str, Any]] = []
+            new_change_entries: List[Dict[str, Any]] = []
+
+            # 伏笔记忆：直接同步当前状态中的 foreshadowing
+            plot_threads = self._state.get("plot_threads", {})
+            foreshadowing_updates = result.get("foreshadowing_updates", [])
+            if isinstance(plot_threads, dict) and isinstance(foreshadowing_updates, list) and foreshadowing_updates:
+                applied_events = self._apply_foreshadowing_updates(plot_threads, foreshadowing_updates, chapter)
+                if applied_events:
+                    new_events.extend(applied_events)
+            foreshadowing = []
+            if isinstance(plot_threads, dict) and isinstance(plot_threads.get("foreshadowing"), list):
+                foreshadowing = [deepcopy(item) for item in plot_threads.get("foreshadowing", []) if isinstance(item, dict)]
+            memory["plot_threads"] = foreshadowing
+            chapter_meta = result.get("chapter_meta") if isinstance(result.get("chapter_meta"), dict) else {}
+            if chapter_meta:
+                hook = chapter_meta.get("hook")
+                if hook:
+                    new_events.append({"ch": chapter, "event": f"钩子: {self._stringify_story_value(hook)}", "type": "chapter_meta"})
+                ending = chapter_meta.get("ending")
+                if ending:
+                    new_events.append({"ch": chapter, "event": f"结尾: {self._stringify_story_value(ending)}", "type": "chapter_meta"})
+
+            for change in result.get("state_changes", []) or []:
+                if not isinstance(change, dict):
+                    continue
+                entity_id = str(change.get("entity_id") or "").strip()
+                field = str(change.get("field") or "").strip()
+                old_value = change.get("old", change.get("old_value"))
+                new_value = change.get("new", change.get("new_value"))
+                description = f"{entity_id}.{field}: {self._stringify_story_value(old_value)} -> {self._stringify_story_value(new_value)}"
+                new_events.append(
+                    {
+                        "ch": chapter,
+                        "event": description,
+                        "entity_id": entity_id,
+                        "field": field,
+                        "type": "state_change",
+                        "change_kind": "state_change",
+                    }
+                )
+                change_entry = self._build_change_ledger_entry(chapter, change)
+                if change_entry:
+                    new_change_entries.append(change_entry)
+
+            self._append_unique_story_events(recent_events, new_events, limit=50)
+            memory["recent_events"] = recent_events
+            self._append_unique_change_ledger(change_ledger, new_change_entries, limit=50)
+            memory["structured_change_ledger"] = change_ledger
+
+            # 章节快照：保留可重建信息
+            chapter_snapshots = list(memory.get("chapter_snapshots") or [])
+            snapshot = {
+                "chapter": chapter,
+                "saved_at": now,
+                "protagonist": protagonist_name,
+                "protagonist_state": protagonist_summary,
+                "chapter_meta": chapter_meta,
+            }
+            chapter_snapshots = [item for item in chapter_snapshots if int((item or {}).get("chapter") or 0) != chapter]
+            chapter_snapshots.append(snapshot)
+            if len(chapter_snapshots) > 20:
+                chapter_snapshots = chapter_snapshots[-20:]
+            memory["chapter_snapshots"] = chapter_snapshots
+
+            if chapter % 5 == 0:
+                memory["last_consolidated_chapter"] = chapter
+                memory["last_consolidated_at"] = now
+
+            memory = normalize_story_memory(memory)
+            self.config.ensure_dirs()
+            atomic_write_json(self._story_memory_path(), memory, use_lock=False, backup=False)
+            return None
+        except Exception as exc:
+            logger.exception("story memory update failed")
+            return f"故事记忆更新失败: {exc}"
+
+    def _build_story_milestone(self, chapter: int, result: Dict[str, Any], fallback_summary: str = "") -> Optional[Dict[str, Any]]:
+        chapter_meta = result.get("chapter_meta") if isinstance(result.get("chapter_meta"), dict) else {}
+        if chapter_meta:
+            hook = chapter_meta.get("hook")
+            if hook:
+                return {"ch": chapter, "event": self._stringify_story_value(hook)}
+            ending = chapter_meta.get("ending")
+            if ending:
+                return {"ch": chapter, "event": self._stringify_story_value(ending)}
+
+        for change in result.get("state_changes", []) or []:
+            if not isinstance(change, dict):
+                continue
+            entity_id = str(change.get("entity_id") or "").strip()
+            field = str(change.get("field") or "").strip()
+            if entity_id and field:
+                old_value = change.get("old", change.get("old_value"))
+                new_value = change.get("new", change.get("new_value"))
+                return {
+                    "ch": chapter,
+                    "event": f"{entity_id}.{field}: {self._stringify_story_value(old_value)} -> {self._stringify_story_value(new_value)}",
+                }
+
+        if fallback_summary:
+            return {"ch": chapter, "event": fallback_summary}
+        return None
 
     # ==================== 导出 ====================
 

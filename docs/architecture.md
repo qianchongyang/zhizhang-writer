@@ -34,7 +34,8 @@
 ├─────────────────────────────────────────────────────────────┤
 │  Agents (8个): Context / Data / 多维 Checker               │
 ├─────────────────────────────────────────────────────────────┤
-│  Data Layer: state.json / index.db / vectors.db            │
+│  Data Layer: state.json / index.db / vectors.db /          │
+│              story_memory.json                             │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -46,7 +47,9 @@
 
 ### Data Agent（写）
 
-职责：从正文提取实体与状态变化，更新 `state.json`、`index.db`、`vectors.db`，保证数据链闭环。
+职责：从正文提取实体与状态变化，更新 `state.json`、`index.db`、`vectors.db` 与 `story_memory.json`，保证数据链闭环。
+
+`story_memory.json` 负责承载跨章节稳定记忆，包括角色阶段摘要、伏笔状态、近章事件与结构化变化账本；`state.json` 继续承载当前工作态，`index.db` 和 `vectors.db` 继续负责历史索引与语义召回。
 
 ## 六维并行审查
 

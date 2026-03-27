@@ -157,6 +157,171 @@ def test_context_snapshot_respects_template(temp_project):
     assert battle_payload.get("template") == "battle"
 
 
+def test_context_manager_includes_story_memory_and_project_memory(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎", "location": {"current": "天云宗"}},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    (temp_project.webnovel_dir / "project_memory.json").write_text(
+        json.dumps({"patterns": [{"pattern_type": "hook", "description": "危机钩"}]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 12,
+                "last_consolidated_at": "2026-03-27T10:00:00Z",
+                "characters": {
+                    "萧炎": {
+                        "current_state": "斗王巅峰",
+                        "last_update_chapter": 12,
+                        "milestones": [{"ch": 12, "event": "突破斗王"}],
+                    }
+                },
+                "plot_threads": [{"name": "玄铁令", "status": "pending"}],
+                "recent_events": [{"ch": 12, "event": "突破斗王"}],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(13, use_snapshot=False, save_snapshot=False)
+    memory = payload["sections"]["memory"]["content"]
+
+    assert memory["project_memory"]["patterns"][0]["description"] == "危机钩"
+    assert memory["story_memory_meta"]["version"] == "1"
+    assert memory["story_memory"]["characters"]["萧炎"]["current_state"] == "斗王巅峰"
+
+
+def test_context_manager_invalidation_on_story_memory_version_change(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 5,
+                "last_consolidated_at": "2026-03-27T10:00:00Z",
+                "characters": {
+                    "萧炎": {
+                        "current_state": "闭关中",
+                        "last_update_chapter": 5,
+                    }
+                },
+                "plot_threads": [],
+                "recent_events": [],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    first = manager.build_context(6, use_snapshot=True, save_snapshot=True)
+    assert first["sections"]["memory"]["content"]["story_memory_meta"]["version"] == "1"
+
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "2",
+                "last_consolidated_chapter": 8,
+                "last_consolidated_at": "2026-03-27T11:00:00Z",
+                "characters": {
+                    "萧炎": {
+                        "current_state": "出关后提升",
+                        "last_update_chapter": 8,
+                    }
+                },
+                "plot_threads": [],
+                "recent_events": [],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    second = manager.build_context(6, use_snapshot=True, save_snapshot=True)
+    assert second["sections"]["memory"]["content"]["story_memory_meta"]["version"] == "2"
+    assert second["sections"]["memory"]["content"]["story_memory"]["characters"]["萧炎"]["current_state"] == "出关后提升"
+
+
+def test_context_manager_invalidation_on_project_memory_change(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    (temp_project.webnovel_dir / "project_memory.json").write_text(
+        json.dumps({"patterns": [{"description": "旧记忆"}]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    first = manager.build_context(7, use_snapshot=True, save_snapshot=True)
+    assert first["sections"]["memory"]["content"]["project_memory"]["patterns"][0]["description"] == "旧记忆"
+
+    (temp_project.webnovel_dir / "project_memory.json").write_text(
+        json.dumps({"patterns": [{"description": "新记忆"}]}, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    second = manager.build_context(7, use_snapshot=True, save_snapshot=True)
+    assert second["sections"]["memory"]["content"]["project_memory"]["patterns"][0]["description"] == "新记忆"
+
+
+def test_context_manager_story_recall_prioritizes_core_threads(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 10,
+                "last_consolidated_at": "2026-03-27T10:00:00Z",
+                "characters": {},
+                "plot_threads": [
+                    {"content": "装饰伏笔", "status": "active", "tier": "装饰", "urgency": 99},
+                    {"content": "核心伏笔", "status": "active", "tier": "核心", "urgency": 10},
+                ],
+                "recent_events": [],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(11, use_snapshot=False, save_snapshot=False)
+    recall = payload["sections"]["story_recall"]["content"]
+    assert recall["priority_foreshadowing"][0]["content"] == "核心伏笔"
+
+
 def test_context_manager_applies_ranker_and_contract_meta(temp_project):
     state = {
         "protagonist_state": {"name": "萧炎"},

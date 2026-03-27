@@ -14,6 +14,9 @@ from data_modules.state_validator import (
     normalize_foreshadowing_item,
     normalize_foreshadowing_status,
     normalize_foreshadowing_tier,
+    infer_change_kind,
+    normalize_story_memory,
+    score_change_significance,
     normalize_state_runtime_sections,
     resolve_chapter_field,
     split_patterns,
@@ -105,3 +108,74 @@ def test_normalize_state_runtime_sections():
     assert "1" in chapter_meta
     assert chapter_meta["1"]["coolpoint_patterns"] == ["打脸", "翻车"]
 
+
+def test_normalize_story_memory_adds_stable_ids_and_limits():
+    raw = {
+        "version": "1",
+        "last_consolidated_chapter": "8",
+        "characters": {
+            "萧炎": {
+                "current_state": "斗王",
+                "last_update_chapter": 8,
+                "milestones": [{"ch": 8, "event": "突破"} for _ in range(12)],
+            }
+        },
+        "plot_threads": [
+            {"content": "玄铁令", "status": "active", "tier": "core", "chapter": 8},
+        ],
+        "recent_events": [
+            {"ch": 8, "event": "突破"},
+        ],
+        "structured_change_ledger": [
+            {"ch": 8, "entity_id": "xiaoyan", "field": "灵石", "old": "100", "new": "150"},
+        ],
+        "chapter_snapshots": [
+            {"chapter": 8, "saved_at": "2026-03-27T10:00:00Z", "protagonist": "萧炎"},
+        ],
+        "meta": {"source": "test"},
+    }
+
+    normalized = normalize_story_memory(raw)
+    assert normalized["characters"]["萧炎"]["milestones"][-1]["milestone_id"]
+    assert normalized["plot_threads"][0]["story_memory_id"]
+    assert normalized["plot_threads"][0]["foreshadowing_id"]
+    assert normalized["recent_events"][0]["event_id"]
+    assert normalized["structured_change_ledger"][0]["change_id"]
+    assert normalized["structured_change_ledger"][0]["delta"] == 50.0
+    assert normalized["chapter_snapshots"][0]["story_memory_id"]
+    assert len(normalized["characters"]["萧炎"]["milestones"]) == 10
+
+
+def test_change_kind_and_significance_are_generic():
+    relation_change = {
+        "entity_id": "a",
+        "field": "关系",
+        "reason": "关键转折",
+    }
+    goal_change = {
+        "entity_id": "b",
+        "field": "目标",
+        "reason": "任务推进",
+    }
+    timeline_change = {
+        "entity_id": "d",
+        "field": "时间",
+        "reason": "次日推进",
+    }
+    generic_change = {
+        "entity_id": "c",
+        "field": "气氛",
+        "reason": "日常过场",
+    }
+
+    assert infer_change_kind(relation_change) == "relationship_change"
+    assert infer_change_kind(goal_change) == "goal_change"
+    assert infer_change_kind(timeline_change) == "timeline_change"
+    assert infer_change_kind(generic_change) == "state_change"
+
+    relation_score = score_change_significance(relation_change)
+    generic_score = score_change_significance(generic_change)
+
+    assert relation_score["memory_tier"] in {"episodic", "consolidated"}
+    assert relation_score["memory_score"] > generic_score["memory_score"]
+    assert generic_score["should_consolidate"] is False

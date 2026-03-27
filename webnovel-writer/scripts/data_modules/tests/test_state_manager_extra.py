@@ -219,6 +219,46 @@ def test_process_chapter_result_and_sqlite_sync(temp_project):
     assert "xiaoyan" in by_tier
 
 
+def test_process_chapter_result_updates_story_memory(temp_project):
+    manager = StateManager(temp_project, enable_sqlite_sync=False)
+    manager._state["protagonist_state"] = {
+        "name": "萧炎",
+        "power": {"realm": "斗者", "layer": 9},
+        "location": {"current": "天云宗"},
+        "golden_finger": {"name": "焚诀", "level": 2},
+    }
+
+    result = {
+        "state_changes": [
+            {"entity_id": "xiaoyan", "field": "realm", "old": "斗者", "new": "斗师", "reason": "突破"},
+            {"entity_id": "xiaoyan", "field": "灵石", "old": "100", "new": "150", "reason": "奖励"},
+        ],
+        "chapter_meta": {
+            "hook": "危机爆发",
+            "ending": {"time": "夜晚", "location": "山谷"},
+        },
+        "foreshadowing_updates": [
+            {"content": "玄铁令", "status": "已回收", "resolved_chapter": 5, "tier": "核心"}
+        ],
+    }
+
+    warnings = manager.process_chapter_result(5, result)
+    assert warnings == []
+
+    story_memory = json.loads(temp_project.story_memory_file.read_text(encoding="utf-8"))
+    assert story_memory["last_consolidated_chapter"] == 5
+    assert story_memory["characters"]["萧炎"]["last_update_chapter"] == 5
+    assert "斗者" in story_memory["characters"]["萧炎"]["current_state"]
+    assert story_memory["characters"]["萧炎"]["milestones"][-1]["ch"] == 5
+    assert story_memory["characters"]["萧炎"]["milestones"][-1]["milestone_id"]
+    assert story_memory["recent_events"][-1]["event_id"]
+    assert story_memory["structured_change_ledger"][-1]["delta"] == 50.0
+    assert story_memory["structured_change_ledger"][-1]["memory_tier"] in {"episodic", "consolidated"}
+    assert story_memory["chapter_snapshots"][-1]["chapter"] == 5
+    assert any(item.get("type") == "state_change" for item in story_memory["recent_events"])
+    assert story_memory["plot_threads"][0]["status"] == "已回收"
+
+
 def test_export_context_and_protagonist_alias(temp_project):
     manager = StateManager(temp_project, enable_sqlite_sync=False)
     manager.add_entity(EntityState(id="xiaoyan", name="萧炎", type="角色", tier="核心"))

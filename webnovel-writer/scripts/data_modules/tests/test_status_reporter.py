@@ -89,6 +89,50 @@ def test_foreshadowing_analysis_uses_real_chapters_and_handles_missing_data():
         assert urgency_by_content["旧日誓言"]["status"] == "⚪ 数据不足"
 
 
+def test_memory_health_section_reflects_story_memory_freshness():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config = DataModulesConfig.from_project_root(tmpdir)
+        config.ensure_dirs()
+        project_root = config.project_root
+
+        state = {
+            "progress": {"current_chapter": 18, "total_words": 54000},
+            "plot_threads": {"foreshadowing": [{"content": "旧伏笔", "status": "未回收"}]},
+        }
+        _write_state(project_root, state)
+        (project_root / ".webnovel" / "memory").mkdir(parents=True, exist_ok=True)
+        (project_root / ".webnovel" / "memory" / "story_memory.json").write_text(
+            json.dumps(
+                {
+                    "version": "1",
+                    "last_consolidated_chapter": 12,
+                    "last_consolidated_at": "2026-03-27T10:00:00Z",
+                    "characters": {"萧炎": {"current_state": "闭关"}},
+                    "plot_threads": [{"content": "旧伏笔", "status": "active"}],
+                    "recent_events": [{"ch": 18, "event": "突破"}],
+                    "structured_change_ledger": [{"ch": 18, "entity_id": "xiaoyan", "field": "灵石", "change_kind": "resource_change", "old_value": "100", "new_value": "150", "delta": 50}],
+                    "chapter_snapshots": [],
+                    "meta": {},
+                },
+                ensure_ascii=False,
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+        reporter = StatusReporter(str(project_root))
+        assert reporter.load_state() is True
+        report = reporter.generate_report("memory")
+
+        assert "## 🧠 记忆健康" in report
+        assert "最后总结章节" in report
+        assert "当前章节差值" in report
+        assert "6 章" in report
+        assert "未回收伏笔数" in report
+        assert "1" in report
+        assert "结构化变化条目" in report
+
+
 def test_pacing_analysis_prefers_real_coolpoint_metadata_over_estimation():
     with tempfile.TemporaryDirectory() as tmpdir:
         config = DataModulesConfig.from_project_root(tmpdir)

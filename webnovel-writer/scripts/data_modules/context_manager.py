@@ -35,6 +35,7 @@ from .genre_profile_builder import (
     extract_markdown_refs,
     parse_genre_tokens,
 )
+from .state_validator import normalize_story_memory, normalize_foreshadowing_tier
 from .writing_guidance_builder import (
     build_methodology_guidance_items,
     build_methodology_strategy_card,
@@ -53,6 +54,7 @@ class ContextManager:
     TEMPLATE_WEIGHTS_DYNAMIC = CONTEXT_TEMPLATE_WEIGHTS_DYNAMIC_DEFAULT
     EXTRA_SECTIONS = {
         "story_skeleton",
+        "story_recall",
         "memory",
         "preferences",
         "alerts",
@@ -68,6 +70,7 @@ class ContextManager:
         "genre_profile",
         "writing_guidance",
         "story_skeleton",
+        "story_recall",
         "memory",
         "preferences",
         "alerts",
@@ -80,7 +83,85 @@ class ContextManager:
         self.index_manager = IndexManager(self.config)
         self.context_ranker = ContextRanker(self.config)
 
-    def _is_snapshot_compatible(self, cached: Dict[str, Any], template: str) -> bool:
+    def _story_memory_path(self) -> Path:
+        return getattr(self.config, "story_memory_file", self.config.webnovel_dir / "memory" / "story_memory.json")
+
+    def _project_memory_path(self) -> Path:
+        return self.config.webnovel_dir / "project_memory.json"
+
+    def _file_mtime_ns(self, path: Path) -> int:
+        try:
+            return int(path.stat().st_mtime_ns)
+        except Exception:
+            return 0
+
+    def _load_story_memory_bundle(self) -> Dict[str, Any]:
+        """加载故事记忆层，返回 content/meta 两部分。"""
+        path = self._story_memory_path()
+        if not path.exists():
+            return {"content": {}, "meta": {"mtime_ns": 0}}
+
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {"content": {}, "meta": {"mtime_ns": self._file_mtime_ns(path)}}
+
+        if not isinstance(raw, dict):
+            return {"content": {}, "meta": {"mtime_ns": self._file_mtime_ns(path)}}
+
+        raw = normalize_story_memory(raw)
+
+        meta = {
+            "version": str(raw.get("version", "")),
+            "last_consolidated_chapter": int(raw.get("last_consolidated_chapter") or 0),
+            "last_consolidated_at": str(raw.get("last_consolidated_at", "")),
+            "mtime_ns": self._file_mtime_ns(path),
+        }
+        return {"content": raw, "meta": meta}
+
+    def _load_project_memory_bundle(self) -> Dict[str, Any]:
+        path = self._project_memory_path()
+        if not path.exists():
+            return {"content": {}, "meta": {"mtime_ns": 0}}
+
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {"content": {}, "meta": {"mtime_ns": self._file_mtime_ns(path)}}
+
+        if not isinstance(raw, dict):
+            return {"content": {}, "meta": {"mtime_ns": self._file_mtime_ns(path)}}
+
+        return {
+            "content": raw,
+            "meta": {"mtime_ns": self._file_mtime_ns(path)},
+        }
+
+    def _context_dependency_meta(
+        self,
+        story_memory_bundle: Optional[Dict[str, Any]] = None,
+        project_memory_bundle: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        story_memory_bundle = story_memory_bundle or self._load_story_memory_bundle()
+        project_memory_bundle = project_memory_bundle or self._load_project_memory_bundle()
+
+        story_meta = dict((story_memory_bundle or {}).get("meta") or {})
+        project_meta = dict((project_memory_bundle or {}).get("meta") or {})
+        return {
+            "story_memory_version": story_meta.get("version", ""),
+            "story_memory_last_consolidated_chapter": story_meta.get("last_consolidated_chapter", 0),
+            "story_memory_last_consolidated_at": story_meta.get("last_consolidated_at", ""),
+            "story_memory_mtime_ns": story_meta.get("mtime_ns", 0),
+            "state_mtime_ns": self._file_mtime_ns(self.config.state_file),
+            "project_memory_mtime_ns": project_meta.get("mtime_ns", 0),
+        }
+
+    def _is_snapshot_compatible(
+        self,
+        cached: Dict[str, Any],
+        template: str,
+        story_memory_meta: Optional[Dict[str, Any]] = None,
+    ) -> bool:
         """判断快照是否可用于当前模板。"""
         if not isinstance(cached, dict):
             return False
@@ -88,13 +169,38 @@ class ContextManager:
         meta = cached.get("meta")
         if not isinstance(meta, dict):
             # 兼容旧快照：未记录 template 时仅允许默认模板复用
-            return template == self.DEFAULT_TEMPLATE
+            return template == self.DEFAULT_TEMPLATE and not story_memory_meta
 
         cached_template = meta.get("template")
         if not isinstance(cached_template, str):
-            return template == self.DEFAULT_TEMPLATE
+            return template == self.DEFAULT_TEMPLATE and not story_memory_meta
 
-        return cached_template == template
+        if cached_template != template:
+            return False
+
+        if story_memory_meta:
+            cached_story_version = str(meta.get("story_memory_version", ""))
+            cached_story_chapter = int(meta.get("story_memory_last_consolidated_chapter") or 0)
+            cached_story_mtime = int(meta.get("story_memory_mtime_ns") or 0)
+            cached_state_mtime = int(meta.get("state_mtime_ns") or 0)
+            cached_project_mtime = int(meta.get("project_memory_mtime_ns") or 0)
+            current_story_version = str(story_memory_meta.get("version", ""))
+            current_story_chapter = int(story_memory_meta.get("last_consolidated_chapter") or 0)
+            current_story_mtime = int(story_memory_meta.get("mtime_ns") or 0)
+            current_state_mtime = self._file_mtime_ns(self.config.state_file)
+            current_project_mtime = self._file_mtime_ns(self._project_memory_path())
+            if cached_story_version != current_story_version:
+                return False
+            if cached_story_chapter != current_story_chapter:
+                return False
+            if cached_story_mtime != current_story_mtime:
+                return False
+            if cached_state_mtime != current_state_mtime:
+                return False
+            if cached_project_mtime != current_project_mtime:
+                return False
+
+        return True
 
     def build_context(
         self,
@@ -110,22 +216,34 @@ class ContextManager:
             template = self.DEFAULT_TEMPLATE
             self._active_template = template
 
+        story_memory_bundle = self._load_story_memory_bundle()
+        project_memory_bundle = self._load_project_memory_bundle()
+        story_memory_meta = self._context_dependency_meta(
+            story_memory_bundle=story_memory_bundle,
+            project_memory_bundle=project_memory_bundle,
+        )
+
         if use_snapshot:
             try:
                 cached = self.snapshot_manager.load_snapshot(chapter)
-                if cached and self._is_snapshot_compatible(cached, template):
+                if cached and self._is_snapshot_compatible(cached, template, story_memory_meta):
                     return cached.get("payload", cached)
             except SnapshotVersionMismatch:
                 # Snapshot incompatible; rebuild below.
                 pass
 
-        pack = self._build_pack(chapter)
+        pack = self._build_pack(
+            chapter,
+            story_memory_bundle=story_memory_bundle,
+            project_memory_bundle=project_memory_bundle,
+        )
         if getattr(self.config, "context_ranker_enabled", True):
             pack = self.context_ranker.rank_pack(pack, chapter)
         assembled = self.assemble_context(pack, template=template, max_chars=max_chars)
 
         if save_snapshot:
             meta = {"template": template}
+            meta.update(story_memory_meta)
             self.snapshot_manager.save_snapshot(chapter, assembled, meta=meta)
 
         return assembled
@@ -186,8 +304,19 @@ class ContextManager:
                 filtered.append(item)
         return filtered
 
-    def _build_pack(self, chapter: int) -> Dict[str, Any]:
+    def _build_pack(
+        self,
+        chapter: int,
+        story_memory_bundle: Optional[Dict[str, Any]] = None,
+        project_memory_bundle: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         state = self._load_state()
+        story_memory_bundle = story_memory_bundle or self._load_story_memory_bundle()
+        project_memory_bundle = project_memory_bundle or self._load_project_memory_bundle()
+        project_memory = project_memory_bundle.get("content") or self._load_json_optional(self._project_memory_path())
+        story_memory_content = dict(story_memory_bundle.get("content") or {})
+        story_memory_meta = dict(story_memory_bundle.get("meta") or {})
+        story_recall = self._build_story_recall(state, story_memory_content, story_memory_meta)
         core = {
             "chapter_outline": self._load_outline(chapter),
             "protagonist_snapshot": state.get("protagonist_state", {}),
@@ -219,7 +348,12 @@ class ContextManager:
         }
 
         preferences = self._load_json_optional(self.config.webnovel_dir / "preferences.json")
-        memory = self._load_json_optional(self.config.webnovel_dir / "project_memory.json")
+        memory = {
+            "project_memory": project_memory,
+            "project_memory_meta": dict(project_memory_bundle.get("meta") or {}),
+            "story_memory": story_memory_content,
+            "story_memory_meta": story_memory_meta,
+        }
         story_skeleton = self._load_story_skeleton(chapter)
         alert_slice = max(0, int(self.config.context_alerts_slice))
         reader_signal = self._load_reader_signal(chapter)
@@ -235,6 +369,7 @@ class ContextManager:
             "genre_profile": genre_profile,
             "writing_guidance": writing_guidance,
             "story_skeleton": story_skeleton,
+            "story_recall": story_recall,
             "preferences": preferences,
             "memory": memory,
             "alerts": {
@@ -714,6 +849,139 @@ class ContextManager:
 
         samples.reverse()
         return samples
+
+    def _build_story_recall(
+        self,
+        state: Dict[str, Any],
+        story_memory: Dict[str, Any],
+        story_memory_meta: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """构建写前优先召回层，帮助模型先看到未回收内容。"""
+        if not isinstance(story_memory, dict):
+            story_memory = {}
+        if not isinstance(story_memory_meta, dict):
+            story_memory_meta = {}
+
+        characters = story_memory.get("characters", {})
+        if not isinstance(characters, dict):
+            characters = {}
+
+        plot_threads = story_memory.get("plot_threads", [])
+        if not isinstance(plot_threads, list):
+            plot_threads = []
+
+        recent_events = story_memory.get("recent_events", [])
+        if not isinstance(recent_events, list):
+            recent_events = []
+
+        change_ledger = story_memory.get("structured_change_ledger", story_memory.get("numeric_ledger", []))
+        if not isinstance(change_ledger, list):
+            change_ledger = []
+
+        protagonist_name = ""
+        protagonist_state = state.get("protagonist_state", {}) if isinstance(state, dict) else {}
+        if isinstance(protagonist_state, dict):
+            protagonist_name = str(protagonist_state.get("name") or "").strip()
+
+        def _thread_sort_key(item: Dict[str, Any]) -> tuple:
+            urgency = item.get("urgency")
+            try:
+                urgency_value = float(urgency) if urgency is not None else -1.0
+            except (TypeError, ValueError):
+                urgency_value = -1.0
+            tier = normalize_foreshadowing_tier(item.get("tier"))
+            tier_weight = {"核心": 3, "支线": 2, "装饰": 1}.get(tier, 0)
+            chapter_value = 0
+            for key in ("target_chapter", "planted_chapter", "chapter"):
+                try:
+                    chapter_value = int(item.get(key) or 0)
+                except (TypeError, ValueError):
+                    chapter_value = 0
+                if chapter_value:
+                    break
+            return (-tier_weight, -urgency_value, chapter_value, str(item.get("name") or item.get("content") or ""))
+
+        priority_foreshadowing: List[Dict[str, Any]] = []
+        for item in plot_threads:
+            if not isinstance(item, dict):
+                continue
+            status = str(item.get("status") or "").strip().lower()
+            if status not in {"pending", "active", "未回收"}:
+                continue
+            priority_foreshadowing.append(item)
+        priority_foreshadowing.sort(key=_thread_sort_key)
+
+        character_focus: List[Dict[str, Any]] = []
+        if protagonist_name and protagonist_name in characters and isinstance(characters.get(protagonist_name), dict):
+            protagonist_entry = dict(characters.get(protagonist_name) or {})
+            character_focus.append(
+                {
+                    "name": protagonist_name,
+                    "current_state": protagonist_entry.get("current_state", ""),
+                    "last_update_chapter": protagonist_entry.get("last_update_chapter", 0),
+                }
+            )
+
+        remaining_characters: List[tuple[str, Dict[str, Any]]] = []
+        for name, info in characters.items():
+            if name == protagonist_name or not isinstance(info, dict):
+                continue
+            remaining_characters.append((str(name), dict(info)))
+        remaining_characters.sort(
+            key=lambda item: (
+                -int(item[1].get("last_update_chapter") or 0),
+                str(item[0]),
+            )
+        )
+        for name, info in remaining_characters[:4]:
+            character_focus.append(
+                {
+                    "name": name,
+                    "current_state": info.get("current_state", ""),
+                    "last_update_chapter": info.get("last_update_chapter", 0),
+                }
+            )
+
+        structured_change_focus: List[Dict[str, Any]] = []
+        change_rows = [item for item in change_ledger if isinstance(item, dict)]
+        change_rows.sort(
+            key=lambda item: (
+                -float(item.get("memory_score") or 0.0),
+                -abs(float(item.get("delta") or 0.0)),
+                -int(item.get("ch") or 0),
+                str(item.get("entity_id") or ""),
+                str(item.get("field") or ""),
+            )
+        )
+        for item in change_rows[:5]:
+            score = float(item.get("memory_score") or 0.0)
+            if score < 60.0:
+                continue
+            structured_change_focus.append(
+                {
+                    "ch": item.get("ch", 0),
+                    "entity_id": item.get("entity_id", ""),
+                    "field": item.get("field", ""),
+                    "change_kind": item.get("change_kind") or item.get("type") or "state_change",
+                    "memory_score": score,
+                    "memory_tier": item.get("memory_tier") or "working",
+                    "old_value": item.get("old_value"),
+                    "new_value": item.get("new_value"),
+                    "old_numeric": item.get("old_numeric"),
+                    "new_numeric": item.get("new_numeric"),
+                    "delta": item.get("delta"),
+                }
+            )
+
+        return {
+            "version": story_memory_meta.get("version", ""),
+            "last_consolidated_chapter": story_memory_meta.get("last_consolidated_chapter", 0),
+            "last_consolidated_at": story_memory_meta.get("last_consolidated_at", ""),
+            "priority_foreshadowing": priority_foreshadowing[:5],
+            "recent_events": recent_events[-5:],
+            "character_focus": character_focus[:5],
+            "structured_change_focus": structured_change_focus,
+        }
 
     def _load_json_optional(self, path: Path) -> Dict[str, Any]:
         if not path.exists():

@@ -106,6 +106,14 @@ class DataModulesConfig:
     def index_db(self) -> Path:
         return self.webnovel_dir / "index.db"
 
+    @property
+    def memory_dir(self) -> Path:
+        return self.webnovel_dir / "memory"
+
+    @property
+    def story_memory_file(self) -> Path:
+        return self.memory_dir / "story_memory.json"
+
     # v5.1 引入: alias_index_file 已废弃，别名存储在 index.db aliases 表
 
     @property
@@ -314,6 +322,7 @@ class DataModulesConfig:
 
     def ensure_dirs(self):
         self.webnovel_dir.mkdir(parents=True, exist_ok=True)
+        self.memory_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def from_project_root(cls, project_root: str | Path) -> "DataModulesConfig":

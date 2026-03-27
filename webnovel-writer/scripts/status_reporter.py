@@ -98,6 +98,7 @@ try:
         get_chapter_meta_entry,
         is_resolved_foreshadowing_status,
         normalize_foreshadowing_tier,
+        normalize_story_memory,
         normalize_state_runtime_sections,
         resolve_chapter_field,
         to_positive_int,
@@ -109,6 +110,7 @@ except ImportError:
         get_chapter_meta_entry,
         is_resolved_foreshadowing_status,
         normalize_foreshadowing_tier,
+        normalize_story_memory,
         normalize_state_runtime_sections,
         resolve_chapter_field,
         to_positive_int,
@@ -130,6 +132,7 @@ class StatusReporter:
         self.project_root = Path(project_root)
         self.config = get_config(self.project_root)
         self.state_file = self.project_root / ".webnovel/state.json"
+        self.story_memory_file = self.project_root / ".webnovel/memory/story_memory.json"
         self.chapters_dir = self.project_root / "正文"
 
         self.state = None
@@ -164,6 +167,15 @@ class StatusReporter:
             self.state = normalize_state_runtime_sections(self.state)
 
         return True
+
+    def _load_story_memory(self) -> Dict[str, Any]:
+        if not self.story_memory_file.exists():
+            return {}
+        try:
+            raw = json.loads(self.story_memory_file.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+        return normalize_story_memory(raw) if isinstance(raw, dict) else {}
 
     def _to_positive_int(self, value: Any) -> Optional[int]:
         """将输入解析为正整数；解析失败返回 None。"""
@@ -872,7 +884,84 @@ class StatusReporter:
         if focus in ["all", "relationships"]:
             report_lines.extend(self._generate_relationship_section())
 
+        # 记忆健康
+        if focus in ["all", "memory", "health"]:
+            report_lines.extend(self._generate_memory_health_section())
+
         return "\n".join(report_lines)
+
+    def _generate_memory_health_section(self) -> List[str]:
+        """生成 story_memory 健康状态。"""
+        memory = self._load_story_memory()
+        if not memory:
+            return [
+                "## 🧠 记忆健康",
+                "",
+                f"- **story_memory**: 未找到 {self.story_memory_file}",
+                "",
+                "---",
+                "",
+            ]
+
+        progress = self.state.get("progress", {}) if isinstance(self.state, dict) else {}
+        current_chapter = int(progress.get("current_chapter", 0) or 0)
+        last_consolidated = int(memory.get("last_consolidated_chapter", 0) or 0)
+        lag = max(0, current_chapter - last_consolidated) if current_chapter > 0 else 0
+
+        characters = memory.get("characters", {})
+        if not isinstance(characters, dict):
+            characters = {}
+
+        plot_threads = memory.get("plot_threads", [])
+        if not isinstance(plot_threads, list):
+            plot_threads = []
+        active_threads = [
+            item
+            for item in plot_threads
+            if isinstance(item, dict) and str(item.get("status") or "").strip().lower() in {"pending", "active", "未回收"}
+        ]
+
+        recent_events = memory.get("recent_events", [])
+        if not isinstance(recent_events, list):
+            recent_events = []
+
+        change_ledger = memory.get("structured_change_ledger", memory.get("numeric_ledger", []))
+        if not isinstance(change_ledger, list):
+            change_ledger = []
+        consolidated_changes = [
+            item
+            for item in change_ledger
+            if isinstance(item, dict) and str(item.get("memory_tier") or "").lower() == "consolidated"
+        ]
+
+        issues: List[str] = []
+        if current_chapter > 0 and last_consolidated == 0:
+            issues.append("尚未形成任何 consolidated 记忆")
+        if lag > 5:
+            issues.append(f"记忆落后当前章节 {lag} 章")
+        if len(active_threads) > self.config.context_max_urgent_foreshadowing:
+            issues.append(f"未回收伏笔 {len(active_threads)} 条，超过建议阈值")
+
+        lines = [
+            "## 🧠 记忆健康",
+            "",
+            f"- **版本**: {memory.get('version', 'unknown')}",
+            f"- **最后总结章节**: 第 {last_consolidated} 章",
+            f"- **当前章节差值**: {lag} 章",
+            f"- **角色记忆数**: {len(characters)}",
+            f"- **未回收伏笔数**: {len(active_threads)}",
+            f"- **近章事件数**: {len(recent_events)}",
+            f"- **结构化变化条目**: {len(change_ledger)}",
+            f"- **已沉淀变化条目**: {len(consolidated_changes)}",
+        ]
+
+        if issues:
+            lines.append(f"- **问题**: {'；'.join(issues)}")
+        else:
+            lines.append("- **问题**: 无")
+
+        lines.extend(["", "---", ""])
+        return lines
 
     def _generate_basic_stats(self) -> List[str]:
         """生成基本统计"""

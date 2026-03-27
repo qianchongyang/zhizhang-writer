@@ -4,6 +4,24 @@
 
 ---
 
+## v5.13.1 (2026-03-27)
+
+**写作驾驶舱重构**
+
+### 核心升级
+- `/webnovel-dashboard` 首页重排为写作驾驶舱，优先展示本章大纲、高优先级召回、记忆健康与写作建议
+- 新增 `dashboard/summary` 只读聚合接口，统一返回首页所需的驾驶舱数据
+- 新增“记忆与召回”入口，集中展示 `story_recall`、`archive_recall` 和记忆健康
+
+### 体验优化
+- 保留实体、图谱、章节、文件、追读力等二级数据页
+- Dashboard 在 `story_memory` 缺失或部分链路降级时仍可工作
+- 首页与写作流程对齐，从“看数据”升级为“看决策”
+
+### 验证
+- `dashboard/tests/test_app.py`
+- `dashboard/frontend npm run build`
+
 ## v5.12.0 (2026-03-27)
 
 **归档层与遗忘机制**

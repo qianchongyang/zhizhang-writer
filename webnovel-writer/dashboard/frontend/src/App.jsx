@@ -8,17 +8,17 @@ import ForceGraph3D from 'react-force-graph-3d'
 
 export default function App() {
     const [page, setPage] = useState('dashboard')
-    const [projectInfo, setProjectInfo] = useState(null)
+    const [dashboardData, setDashboardData] = useState(null)
     const [refreshKey, setRefreshKey] = useState(0)
     const [connected, setConnected] = useState(false)
 
-    const loadProjectInfo = useCallback(() => {
-        fetchJSON('/api/project/info')
-            .then(setProjectInfo)
-            .catch(() => setProjectInfo(null))
+    const loadDashboardData = useCallback(() => {
+        fetchJSON('/api/dashboard/summary')
+            .then(setDashboardData)
+            .catch(() => setDashboardData(null))
     }, [])
 
-    useEffect(() => { loadProjectInfo() }, [loadProjectInfo, refreshKey])
+    useEffect(() => { loadDashboardData() }, [loadDashboardData, refreshKey])
 
     // SSE 订阅
     useEffect(() => {
@@ -34,7 +34,7 @@ export default function App() {
         return () => { unsub(); setConnected(false) }
     }, [])
 
-    const title = projectInfo?.project_info?.title || '未加载'
+    const title = dashboardData?.project_info?.title || dashboardData?.project_info?.project_info?.title || '未加载'
 
     return (
         <div className="app-layout">
@@ -62,11 +62,13 @@ export default function App() {
             </aside>
 
             <main className="main-content">
-                {page === 'dashboard' && <DashboardPage data={projectInfo} key={refreshKey} />}
+                {page === 'dashboard' && <DashboardPage data={dashboardData} key={refreshKey} />}
+                {page === 'memory' && <MemoryRecallPage data={dashboardData} key={refreshKey} />}
                 {page === 'entities' && <EntitiesPage key={refreshKey} />}
                 {page === 'graph' && <GraphPage key={refreshKey} />}
                 {page === 'chapters' && <ChaptersPage key={refreshKey} />}
                 {page === 'files' && <FilesPage />}
+                {page === 'data' && <AllDataPage key={refreshKey} />}
                 {page === 'reading' && <ReadingPowerPage key={refreshKey} />}
             </main>
         </div>
@@ -74,7 +76,9 @@ export default function App() {
 }
 
 const NAV_ITEMS = [
-    { id: 'dashboard', icon: '📊', label: '数据总览' },
+    { id: 'dashboard', icon: '✍️', label: '写作驾驶舱' },
+    { id: 'memory', icon: '🧠', label: '记忆与召回' },
+    { id: 'data', icon: '🧪', label: '全量数据' },
     { id: 'entities', icon: '👤', label: '设定词典' },
     { id: 'graph', icon: '🕸️', label: '关系图谱' },
     { id: 'chapters', icon: '📝', label: '章节一览' },
@@ -121,27 +125,35 @@ function DashboardPage({ data }) {
     const progress = data.progress || {}
     const protagonist = data.protagonist_state || {}
     const strand = data.strand_tracker || {}
-    const foreshadowing = data.plot_threads?.foreshadowing || []
+    const storyRecall = data.story_recall || {}
+    const memoryHealth = data.memory_health || {}
+    const writingGuidance = data.writing_guidance || {}
+    const readerSignal = data.reader_signal || {}
+    const genreProfile = data.genre_profile || {}
+    const chapterOutline = data.chapter_outline || ''
+    const recentSummaries = data.recent_summaries || []
+    const unresolvedForeshadow = storyRecall.priority_foreshadowing || []
+    const recentEvents = storyRecall.recent_events || []
+    const characterFocus = storyRecall.character_focus || []
+    const changeFocus = storyRecall.structured_change_focus || []
+    const archiveRecall = storyRecall.archive_recall || {}
 
     const totalWords = progress.total_words || 0
     const targetWords = info.target_words || 2000000
     const pct = targetWords > 0 ? Math.min(100, (totalWords / targetWords * 100)).toFixed(1) : 0
-
-    const unresolvedForeshadow = foreshadowing.filter(f => {
-        const s = (f.status || '').toLowerCase()
-        return s !== '已回收' && s !== '已兑现' && s !== 'resolved'
-    })
 
     // Strand 历史统计
     const history = strand.history || []
     const strandCounts = { quest: 0, fire: 0, constellation: 0 }
     history.forEach(h => { if (strandCounts[h.strand] !== undefined) strandCounts[h.strand]++ })
     const total = history.length || 1
+    const healthStatus = memoryHealth.status || 'unknown'
+    const healthBadge = healthStatus === 'healthy' ? 'badge-green' : healthStatus === 'busy' ? 'badge-amber' : 'badge-red'
 
     return (
         <>
             <div className="page-header">
-                <h2>📊 数据总览</h2>
+                <h2>✍️ 写作驾驶舱</h2>
                 <span className="card-badge badge-blue">{info.genre || '未知题材'}</span>
             </div>
 
@@ -171,58 +183,333 @@ function DashboardPage({ data }) {
                 </div>
 
                 <div className="card stat-card">
-                    <span className="stat-label">未回收伏笔</span>
+                    <span className="stat-label">高优先级召回</span>
                     <span className="stat-value" style={{ color: unresolvedForeshadow.length > 10 ? 'var(--accent-red)' : 'var(--accent-amber)' }}>
                         {unresolvedForeshadow.length}
                     </span>
-                    <span className="stat-sub">总计 {foreshadowing.length} 条伏笔</span>
+                    <span className="stat-sub">总计 {unresolvedForeshadow.length} 条活跃信号</span>
+                </div>
+
+                <div className="card stat-card">
+                    <span className="stat-label">记忆健康</span>
+                    <span className="stat-value plain">{memoryHealth.memory_stale ? '需关注' : '正常'}</span>
+                    <span className="stat-sub">状态 {healthStatus} · Gap {memoryHealth.consolidation_gap || 0}</span>
                 </div>
             </div>
 
-            {/* Strand Weave 比例 */}
-            <div className="card dashboard-section-card">
-                <div className="card-header">
-                    <span className="card-title">Strand Weave 节奏分布</span>
-                    <span className="card-badge badge-purple">{strand.current_dominant || '?'}</span>
-                </div>
-                <div className="strand-bar">
-                    <div className="segment strand-quest" style={{ width: `${(strandCounts.quest / total * 100).toFixed(1)}%` }} />
-                    <div className="segment strand-fire" style={{ width: `${(strandCounts.fire / total * 100).toFixed(1)}%` }} />
-                    <div className="segment strand-constellation" style={{ width: `${(strandCounts.constellation / total * 100).toFixed(1)}%` }} />
-                </div>
-                <div className="strand-legend">
-                    <span>🔵 Quest {(strandCounts.quest / total * 100).toFixed(0)}%</span>
-                    <span>🔴 Fire {(strandCounts.fire / total * 100).toFixed(0)}%</span>
-                    <span>🟣 Constellation {(strandCounts.constellation / total * 100).toFixed(0)}%</span>
-                </div>
-            </div>
-
-            {/* 伏笔列表 */}
-            {unresolvedForeshadow.length > 0 ? (
-                <div className="card dashboard-section-card">
-                    <div className="card-header">
-                        <span className="card-title">⚠️ 待回收伏笔 (Top 20)</span>
+            <div className="split-layout">
+                <div className="split-main">
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">本章大纲</span>
+                            <span className="card-badge badge-purple">Ch.{progress.current_chapter || data.chapter || 0}</span>
+                        </div>
+                        <div className="entity-detail">
+                            <p className="entity-desc">{chapterOutline || '暂无本章大纲'}</p>
+                            {recentSummaries.length > 0 ? (
+                                <div className="entity-current-block">
+                                    <strong>最近摘要：</strong>
+                                    <ul className="summary-list">
+                                        {recentSummaries.map((item, index) => {
+                                            const chapter = item?.chapter || '?'
+                                            const summary = item?.summary || ''
+                                            return <li key={index}>Ch.{chapter}: {summary}</li>
+                                        })}
+                                    </ul>
+                                </div>
+                            ) : null}
+                        </div>
                     </div>
-                    <div className="table-wrap">
-                        <table className="data-table">
-                            <thead><tr><th>内容</th><th>状态</th><th>埋设章</th></tr></thead>
-                            <tbody>
-                                {unresolvedForeshadow.slice(0, 20).map((f, i) => (
-                                    <tr key={i}>
-                                        <td className="truncate" style={{ maxWidth: 400 }}>{f.content || f.description || '—'}</td>
-                                        <td><span className="card-badge badge-amber">{f.status || '未知'}</span></td>
-                                        <td>{f.chapter || f.planted_chapter || '—'}</td>
-                                    </tr>
+
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">高优先级召回</span>
+                            <span className="card-badge badge-amber">{storyRecall.recall_policy?.mode || 'normal'}</span>
+                        </div>
+                        {unresolvedForeshadow.length > 0 ? (
+                            <div className="table-wrap">
+                                <table className="data-table">
+                                    <thead><tr><th>内容</th><th>状态</th><th>埋设章</th></tr></thead>
+                                    <tbody>
+                                        {unresolvedForeshadow.slice(0, 5).map((item, index) => (
+                                            <tr key={index}>
+                                                <td className="truncate" style={{ maxWidth: 380 }}>{item.content || item.description || item.event || '—'}</td>
+                                                <td><span className="card-badge badge-amber">{item.status || '未知'}</span></td>
+                                                <td>{item.chapter || item.planted_chapter || item.target_chapter || '—'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : <div className="empty-state compact"><p>当前没有需要优先召回的伏笔</p></div>}
+
+                        {recentEvents.length > 0 ? (
+                            <div className="entity-current-block">
+                                <strong>最近事件：</strong>
+                                <ul className="summary-list">
+                                    {recentEvents.slice(0, 3).map((item, index) => (
+                                        <li key={index}>Ch.{item.ch || item.chapter || '?'}: {item.event || item.content || '—'}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+
+                        {characterFocus.length > 0 ? (
+                            <div className="entity-current-block">
+                                <strong>关键人物：</strong>
+                                <ul className="summary-list">
+                                    {characterFocus.slice(0, 3).map((item, index) => (
+                                        <li key={index}>{item.name || '未命名角色'}: {item.current_state || '—'}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+
+                        {changeFocus.length > 0 ? (
+                            <div className="entity-current-block">
+                                <strong>结构化变化：</strong>
+                                <ul className="summary-list">
+                                    {changeFocus.slice(0, 3).map((item, index) => (
+                                        <li key={index}>{item.entity_id || '—'}.{item.field || '—'}: {item.old_value || '—'} → {item.new_value || '—'}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+                    </div>
+
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">写作建议</span>
+                            <span className="card-badge badge-cyan">{writingGuidance.checklist_score?.score ?? '—'}</span>
+                        </div>
+                        <div className="entity-detail">
+                            {Array.isArray(writingGuidance.guidance_items) && writingGuidance.guidance_items.length > 0 ? (
+                                <ul className="summary-list">
+                                    {writingGuidance.guidance_items.map((item, index) => <li key={index}>{item}</li>)}
+                                </ul>
+                            ) : <p>暂无写作建议</p>}
+
+                            {Array.isArray(writingGuidance.checklist) && writingGuidance.checklist.length > 0 ? (
+                                <div className="entity-current-block">
+                                    <strong>检查清单：</strong>
+                                    <ul className="summary-list">
+                                        {writingGuidance.checklist.slice(0, 5).map((item, index) => (
+                                            <li key={index}>
+                                                {item.required ? '【必做】' : '【可选】'} {item.label || item.id || '未命名项'}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
+                </div>
+
+                <div className="split-side">
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">记忆健康</span>
+                            <span className={`card-badge ${healthBadge}`}>{healthStatus}</span>
+                        </div>
+                        <div className="entity-detail">
+                            <p><strong>回收状态：</strong>{memoryHealth.should_recall_story_memory ? '启用' : '停用'}</p>
+                            <p><strong>last consolidated：</strong>Ch.{memoryHealth.last_consolidated_chapter || 0}</p>
+                            <p><strong>consolidation gap：</strong>{memoryHealth.consolidation_gap || 0}</p>
+                            <p><strong>召回信号：</strong>{memoryHealth.signal_count || 0}</p>
+                            <p><strong>未回收伏笔：</strong>{memoryHealth.priority_foreshadowing_count || 0}</p>
+                            <p><strong>归档召回：</strong>{memoryHealth.archive_available ? '可用' : '未命中'}</p>
+                            {memoryHealth.memory_stale ? <p className="debt-positive">记忆层偏旧，建议优先整理。</p> : null}
+                        </div>
+                    </div>
+
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">最近事件摘要</span>
+                            <span className="card-badge badge-blue">{recentSummaries.length} 条</span>
+                        </div>
+                        {recentSummaries.length > 0 ? (
+                            <ul className="summary-list compact">
+                                {recentSummaries.slice(0, 5).map((item, index) => (
+                                    <li key={index}>Ch.{item.chapter || '?'} · {String(item.summary || '').slice(0, 80)}</li>
                                 ))}
-                            </tbody>
-                        </table>
+                            </ul>
+                        ) : <div className="empty-state compact"><p>暂无摘要数据</p></div>}
+                    </div>
+
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">节奏分布</span>
+                            <span className="card-badge badge-purple">{strand.current_dominant || '?'}</span>
+                        </div>
+                        <div className="strand-bar">
+                            <div className="segment strand-quest" style={{ width: `${(strandCounts.quest / total * 100).toFixed(1)}%` }} />
+                            <div className="segment strand-fire" style={{ width: `${(strandCounts.fire / total * 100).toFixed(1)}%` }} />
+                            <div className="segment strand-constellation" style={{ width: `${(strandCounts.constellation / total * 100).toFixed(1)}%` }} />
+                        </div>
+                        <div className="strand-legend">
+                            <span>🔵 Quest {(strandCounts.quest / total * 100).toFixed(0)}%</span>
+                            <span>🔴 Fire {(strandCounts.fire / total * 100).toFixed(0)}%</span>
+                            <span>🟣 Constellation {(strandCounts.constellation / total * 100).toFixed(0)}%</span>
+                        </div>
+                    </div>
+
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">题材与阅读信号</span>
+                        </div>
+                        <div className="entity-detail">
+                            <p><strong>题材：</strong>{info.genre || '未知'}</p>
+                            <p><strong>复合题材：</strong>{Array.isArray(genreProfile.genres) && genreProfile.genres.length > 0 ? genreProfile.genres.join(' + ') : '—'}</p>
+                            <p><strong>最近审查均分：</strong>{readerSignal.review_trend?.overall_avg ?? '—'}</p>
+                            <p><strong>低分区间：</strong>{Array.isArray(readerSignal.low_score_ranges) ? readerSignal.low_score_ranges.length : 0}</p>
+                        </div>
                     </div>
                 </div>
-            ) : null}
-
-            <MergedDataView />
+            </div>
         </>
     )
+}
+
+function MemoryRecallPage({ data }) {
+    if (!data) return <div className="loading">加载中…</div>
+
+    const storyRecall = data.story_recall || {}
+    const memoryHealth = data.memory_health || {}
+    const writingGuidance = data.writing_guidance || {}
+    const archiveRecall = storyRecall.archive_recall || {}
+    const recallPolicy = storyRecall.recall_policy || {}
+
+    return (
+        <>
+            <div className="page-header">
+                <h2>🧠 记忆与召回</h2>
+                <span className={`card-badge ${memoryHealth.memory_stale ? 'badge-amber' : 'badge-green'}`}>
+                    {memoryHealth.memory_stale ? '需要整理' : '稳定'}
+                </span>
+            </div>
+
+            <div className="dashboard-grid">
+                <div className="card stat-card">
+                    <span className="stat-label">召回模式</span>
+                    <span className="stat-value plain">{recallPolicy.mode || 'normal'}</span>
+                    <span className="stat-sub">signals {recallPolicy.signal_count || 0} · gap {recallPolicy.consolidation_gap || 0}</span>
+                </div>
+                <div className="card stat-card">
+                    <span className="stat-label">归档可用</span>
+                    <span className="stat-value">{memoryHealth.archive_available ? '是' : '否'}</span>
+                    <span className="stat-sub">plot {memoryHealth.archive_counts?.plot_threads || 0} · event {memoryHealth.archive_counts?.recent_events || 0}</span>
+                </div>
+                <div className="card stat-card">
+                    <span className="stat-label">未回收伏笔</span>
+                    <span className="stat-value">{memoryHealth.priority_foreshadowing_count || 0}</span>
+                    <span className="stat-sub">recent events {memoryHealth.recent_events_count || 0}</span>
+                </div>
+                <div className="card stat-card">
+                    <span className="stat-label">写作评分</span>
+                    <span className="stat-value plain">{writingGuidance.checklist_score?.score ?? '—'}</span>
+                    <span className="stat-sub">completion {writingGuidance.checklist_score?.completion_rate ?? '—'}</span>
+                </div>
+            </div>
+
+            <div className="split-layout">
+                <div className="split-main">
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">高优先级召回</span>
+                            <span className="card-badge badge-amber">{storyRecall.priority_foreshadowing?.length || 0} 条</span>
+                        </div>
+                        <div className="entity-detail">
+                            <p><strong>策略：</strong>mode={recallPolicy.mode || 'normal'} · should_recall={String(recallPolicy.should_recall_story_memory)}</p>
+                            {Array.isArray(storyRecall.priority_foreshadowing) && storyRecall.priority_foreshadowing.length > 0 ? (
+                                <ul className="summary-list">
+                                    {storyRecall.priority_foreshadowing.slice(0, 8).map((item, index) => (
+                                        <li key={index}>
+                                            {item.name || item.content || item.event || '未命名伏笔'}
+                                            {item.urgency !== undefined ? `（urgency=${item.urgency}）` : ''}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : <p>暂无活跃召回信号。</p>}
+                        </div>
+                    </div>
+
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">归档召回</span>
+                            <span className="card-badge badge-purple">{archiveRecall.plot_threads?.length || 0} / {archiveRecall.recent_events?.length || 0}</span>
+                        </div>
+                        {archiveRecall.plot_threads?.length > 0 ? (
+                            <>
+                                <div className="entity-current-block">
+                                    <strong>归档伏笔：</strong>
+                                    <ul className="summary-list">
+                                        {archiveRecall.plot_threads.slice(0, 5).map((item, index) => (
+                                            <li key={index}>{item.content || item.event || '—'}（tier={item.memory_tier || 'archive'} · score={item.archive_score ?? '—'}）</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </>
+                        ) : <div className="empty-state compact"><p>暂无归档伏笔召回</p></div>}
+
+                        {archiveRecall.recent_events?.length > 0 ? (
+                            <div className="entity-current-block">
+                                <strong>归档事件：</strong>
+                                <ul className="summary-list">
+                                    {archiveRecall.recent_events.slice(0, 5).map((item, index) => (
+                                        <li key={index}>Ch.{item.ch || item.chapter || '?'}: {item.event || '—'}（score={item.archive_score ?? '—'}）</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+
+                        {archiveRecall.structured_change_focus?.length > 0 ? (
+                            <div className="entity-current-block">
+                                <strong>归档变化：</strong>
+                                <ul className="summary-list">
+                                    {archiveRecall.structured_change_focus.slice(0, 5).map((item, index) => (
+                                        <li key={index}>{item.entity_id || '—'}.{item.field || '—'}（tier={item.memory_tier || 'archive'} · score={item.archive_score ?? '—'}）</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : null}
+                    </div>
+                </div>
+
+                <div className="split-side">
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">记忆健康</span>
+                            <span className={`card-badge ${memoryHealth.memory_stale ? 'badge-red' : 'badge-green'}`}>{memoryHealth.status || 'unknown'}</span>
+                        </div>
+                        <div className="entity-detail">
+                            <p><strong>last consolidated：</strong>Ch.{memoryHealth.last_consolidated_chapter || 0}</p>
+                            <p><strong>gap：</strong>{memoryHealth.consolidation_gap || 0}</p>
+                            <p><strong>signals：</strong>{memoryHealth.signal_count || 0}</p>
+                            <p><strong>characters：</strong>{memoryHealth.character_focus_count || 0}</p>
+                            <p><strong>changes：</strong>{memoryHealth.structured_change_count || 0}</p>
+                            <p><strong>archive：</strong>{memoryHealth.archive_available ? 'available' : 'empty'}</p>
+                        </div>
+                    </div>
+
+                    <div className="card dashboard-section-card">
+                        <div className="card-header">
+                            <span className="card-title">写作建议</span>
+                            <span className="card-badge badge-cyan">{writingGuidance.checklist?.length || 0} 项</span>
+                        </div>
+                        {Array.isArray(writingGuidance.guidance_items) && writingGuidance.guidance_items.length > 0 ? (
+                            <ul className="summary-list compact">
+                                {writingGuidance.guidance_items.slice(0, 6).map((item, index) => <li key={index}>{item}</li>)}
+                            </ul>
+                        ) : <div className="empty-state compact"><p>暂无写作建议</p></div>}
+                    </div>
+                </div>
+            </div>
+        </>
+    )
+}
+
+function AllDataPage() {
+    return <MergedDataView />
 }
 
 

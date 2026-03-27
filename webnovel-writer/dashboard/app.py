@@ -6,10 +6,11 @@ Webnovel Dashboard - FastAPI 主应用
 
 import asyncio
 import json
+import sys
 import sqlite3
 from contextlib import asynccontextmanager, closing
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -36,6 +37,13 @@ def _get_project_root() -> Path:
 
 def _webnovel_dir() -> Path:
     return _get_project_root() / ".webnovel"
+
+
+def _ensure_plugin_scripts_path() -> None:
+    scripts_dir = Path(__file__).resolve().parents[1] / "scripts"
+    scripts_dir_str = str(scripts_dir)
+    if scripts_dir.exists() and scripts_dir_str not in sys.path:
+        sys.path.insert(0, scripts_dir_str)
 
 
 # ---------------------------------------------------------------------------
@@ -78,6 +86,74 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
         if not state_path.is_file():
             raise HTTPException(404, "state.json 不存在")
         return json.loads(state_path.read_text(encoding="utf-8"))
+
+    @app.get("/api/dashboard/summary")
+    def dashboard_summary():
+        """返回写作驾驶舱所需的聚合只读数据。"""
+        root = _get_project_root()
+        _ensure_plugin_scripts_path()
+        state = _load_json_optional(_webnovel_dir() / "state.json")
+        story_memory = _load_json_optional(_webnovel_dir() / "memory" / "story_memory.json")
+        chapter = int((state.get("progress") or {}).get("current_chapter") or 0)
+        if chapter <= 0:
+            chapter = 1
+
+        summary: Dict[str, Any] = {
+            "project_info": (state.get("project_info") or {}) if isinstance(state, dict) else {},
+            "progress": state.get("progress") if isinstance(state, dict) else {},
+            "protagonist_state": state.get("protagonist_state") if isinstance(state, dict) else {},
+            "strand_tracker": state.get("strand_tracker") if isinstance(state, dict) else {},
+            "chapter": chapter,
+            "chapter_outline": "",
+            "story_recall": {},
+            "memory_health": {},
+            "writing_guidance": {},
+            "reader_signal": {},
+            "genre_profile": {},
+            "diagnostics": {"degraded": False, "reason": ""},
+        }
+
+        try:
+            from scripts.data_modules.config import DataModulesConfig
+            from scripts.data_modules.context_manager import ContextManager
+
+            config = DataModulesConfig.from_project_root(root)
+            config.ensure_dirs()
+            context = ContextManager(config).build_context(
+                chapter,
+                use_snapshot=False,
+                save_snapshot=False,
+            )
+            sections = context.get("sections") or {}
+            core = sections.get("core", {}).get("content") or {}
+            story_recall = sections.get("story_recall", {}).get("content") or {}
+            writing_guidance = sections.get("writing_guidance", {}).get("content") or {}
+            reader_signal = sections.get("reader_signal", {}).get("content") or {}
+            genre_profile = sections.get("genre_profile", {}).get("content") or {}
+
+            summary.update(
+                {
+                    "chapter_outline": str(core.get("chapter_outline") or ""),
+                    "recent_summaries": core.get("recent_summaries") or [],
+                    "recent_meta": core.get("recent_meta") or [],
+                    "story_recall": story_recall,
+                    "writing_guidance": writing_guidance,
+                    "reader_signal": reader_signal,
+                    "genre_profile": genre_profile,
+                    "memory_health": _build_memory_health(state, story_recall),
+                }
+            )
+        except Exception as exc:  # pragma: no cover - dashboard should degrade gracefully
+            summary["chapter_outline"] = _fallback_chapter_outline(root, chapter)
+            fallback_recall = _build_fallback_story_recall(state, story_memory)
+            summary["story_recall"] = fallback_recall
+            summary["memory_health"] = _build_memory_health(state, fallback_recall)
+            summary["diagnostics"] = {"degraded": True, "reason": str(exc)}
+
+        if not summary.get("chapter_outline"):
+            summary["chapter_outline"] = _fallback_chapter_outline(root, chapter)
+
+        return summary
 
     # ===========================================================
     # API：实体数据库（index.db 只读查询）
@@ -442,3 +518,165 @@ def _is_child(path: Path, parent: Path) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _load_json_optional(path: Path) -> Dict[str, Any]:
+    if not path.is_file():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _fallback_chapter_outline(project_root: Path, chapter: int) -> str:
+    try:
+        from chapter_outline_loader import load_chapter_outline
+    except Exception:
+        return ""
+    try:
+        return load_chapter_outline(project_root, chapter, max_chars=1500)
+    except Exception:
+        return ""
+
+
+def _build_memory_health(state: Dict[str, Any], story_recall: Dict[str, Any]) -> Dict[str, Any]:
+    recall_policy = story_recall.get("recall_policy") or {}
+    priority_foreshadowing = story_recall.get("priority_foreshadowing") or []
+    recent_events = story_recall.get("recent_events") or []
+    character_focus = story_recall.get("character_focus") or []
+    structured_change_focus = story_recall.get("structured_change_focus") or []
+    archive_recall = story_recall.get("archive_recall") or {}
+    archive_counts = {
+        "plot_threads": len(archive_recall.get("plot_threads") or []),
+        "recent_events": len(archive_recall.get("recent_events") or []),
+        "structured_change_focus": len(archive_recall.get("structured_change_focus") or []),
+    }
+
+    last_consolidated_chapter = int(story_recall.get("last_consolidated_chapter") or 0)
+    current_chapter = int((state.get("progress") or {}).get("current_chapter") or 0)
+    consolidation_gap = int(recall_policy.get("consolidation_gap") or max(0, current_chapter - last_consolidated_chapter))
+    stale = consolidation_gap >= 3
+    status = "healthy"
+    if stale and not archive_recall:
+        status = "lagging"
+    elif len(priority_foreshadowing) >= 5 or len(structured_change_focus) >= 4:
+        status = "busy"
+
+    return {
+        "status": status,
+        "current_chapter": current_chapter,
+        "last_consolidated_chapter": last_consolidated_chapter,
+        "consolidation_gap": consolidation_gap,
+        "should_recall_story_memory": bool(recall_policy.get("should_recall_story_memory")),
+        "recall_mode": recall_policy.get("mode", "normal"),
+        "signal_count": int(recall_policy.get("signal_count") or 0),
+        "tier_counts": recall_policy.get("tier_counts") or {},
+        "priority_foreshadowing_count": len(priority_foreshadowing),
+        "recent_events_count": len(recent_events),
+        "character_focus_count": len(character_focus),
+        "structured_change_count": len(structured_change_focus),
+        "archive_available": bool(archive_recall),
+        "archive_counts": archive_counts,
+        "memory_stale": stale,
+    }
+
+
+def _build_fallback_story_recall(state: Dict[str, Any], story_memory: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(story_memory, dict):
+        story_memory = {}
+
+    characters = story_memory.get("characters") if isinstance(story_memory.get("characters"), dict) else {}
+    plot_threads = story_memory.get("plot_threads") if isinstance(story_memory.get("plot_threads"), list) else []
+    recent_events = story_memory.get("recent_events") if isinstance(story_memory.get("recent_events"), list) else []
+    change_ledger = (
+        story_memory.get("structured_change_ledger")
+        if isinstance(story_memory.get("structured_change_ledger"), list)
+        else story_memory.get("numeric_ledger")
+        if isinstance(story_memory.get("numeric_ledger"), list)
+        else []
+    )
+    archive = story_memory.get("archive") if isinstance(story_memory.get("archive"), dict) else {}
+
+    protagonist_name = ""
+    protagonist_state = state.get("protagonist_state", {}) if isinstance(state, dict) else {}
+    if isinstance(protagonist_state, dict):
+        protagonist_name = str(protagonist_state.get("name") or "").strip()
+
+    active_foreshadowing = []
+    for item in plot_threads:
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status") or "").lower()
+        if status and status not in {"pending", "active", "未回收"}:
+            continue
+        active_foreshadowing.append(item)
+
+    character_focus = []
+    if protagonist_name and protagonist_name in characters and isinstance(characters.get(protagonist_name), dict):
+        protagonist_entry = dict(characters.get(protagonist_name) or {})
+        character_focus.append(
+            {
+                "name": protagonist_name,
+                "current_state": protagonist_entry.get("current_state", ""),
+                "last_update_chapter": protagonist_entry.get("last_update_chapter", 0),
+            }
+        )
+    for name, info in list(characters.items())[:4]:
+        if name == protagonist_name or not isinstance(info, dict):
+            continue
+        character_focus.append(
+            {
+                "name": str(name),
+                "current_state": info.get("current_state", ""),
+                "last_update_chapter": info.get("last_update_chapter", 0),
+            }
+        )
+
+    structured_change_focus = []
+    for item in change_ledger[:5]:
+        if not isinstance(item, dict):
+            continue
+        structured_change_focus.append(
+            {
+                "ch": item.get("ch", 0),
+                "entity_id": item.get("entity_id", ""),
+                "field": item.get("field", ""),
+                "change_kind": item.get("change_kind") or item.get("type") or "state_change",
+                "memory_score": item.get("memory_score", 0),
+                "memory_tier": item.get("memory_tier", "working"),
+                "old_value": item.get("old_value"),
+                "new_value": item.get("new_value"),
+                "delta": item.get("delta"),
+            }
+        )
+
+    archive_recall = {
+        "plot_threads": [dict(item, memory_tier="archive", archive_score=1) for item in (archive.get("plot_threads") or [])[:2] if isinstance(item, dict)],
+        "recent_events": [dict(item, memory_tier="archive", archive_score=1) for item in (archive.get("recent_events") or [])[:2] if isinstance(item, dict)],
+        "structured_change_focus": [dict(item, memory_tier="archive", archive_score=1) for item in (archive.get("structured_change_ledger") or [])[:2] if isinstance(item, dict)],
+    }
+
+    return {
+        "version": str(story_memory.get("version", "")),
+        "last_consolidated_chapter": int(story_memory.get("last_consolidated_chapter") or 0),
+        "last_consolidated_at": str(story_memory.get("last_consolidated_at", "")),
+        "recall_policy": {
+            "mode": "normal" if not story_memory else "boost",
+            "should_recall_story_memory": bool(story_memory),
+            "reasons": ["fallback_story_memory"],
+            "signal_count": len(active_foreshadowing) + len(character_focus) + len(structured_change_focus) + len(recent_events),
+            "consolidation_gap": max(0, int((state.get("progress") or {}).get("current_chapter") or 0) - int(story_memory.get("last_consolidated_chapter") or 0)),
+            "tier_counts": {
+                "consolidated": len([item for item in structured_change_focus if str(item.get("memory_tier")) == "consolidated"]),
+                "episodic": len([item for item in structured_change_focus if str(item.get("memory_tier")) == "episodic"]),
+                "working": len([item for item in structured_change_focus if str(item.get("memory_tier")) == "working"]),
+            },
+        },
+        "priority_foreshadowing": active_foreshadowing[:5],
+        "recent_events": recent_events[-5:],
+        "character_focus": character_focus[:5],
+        "structured_change_focus": structured_change_focus[:5],
+        "archive_recall": archive_recall if any(archive_recall.values()) else {},
+    }

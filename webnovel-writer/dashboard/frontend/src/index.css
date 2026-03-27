@@ -457,6 +457,27 @@ body {
   margin-top: 12px;
 }
 
+.summary-list {
+  margin: 8px 0 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-main);
+}
+
+.summary-list.compact {
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-sub);
+}
+
+.summary-list li {
+  word-break: break-word;
+}
+
 .graph-shell {
   padding: 0;
   overflow: hidden;

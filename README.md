@@ -88,7 +88,8 @@ python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<WORKS
 ```
 
 说明：
-- Dashboard 为只读面板（项目状态、实体图谱、章节/大纲浏览、追读力查看）。
+- Dashboard 为只读面板，首页改为“写作驾驶舱”，可快速查看本章大纲、高优先级召回、记忆健康与写作建议。
+- 侧边栏保留实体图谱、章节/大纲浏览、追读力与全量数据页，适合作为排障与查表入口。
 - 前端构建产物已随插件发布，使用者无需本地 `npm build`。
 
 ### 7) Agent 模型设置（可选）
@@ -118,7 +119,8 @@ model: sonnet
 
 | 版本 | 说明 |
 |------|------|
-| **v5.12.0 (当前)** | 通用记忆引擎 v5.12.0：归档层、健康报告、容量余量与遗忘清理 |
+| **v5.13.1 (当前)** | Dashboard 写作驾驶舱重构：首页聚焦本章决策、记忆与召回页、聚合 summary 接口 |
+| **v5.12.0** | 通用记忆引擎 v5.12.0：归档层、健康报告、容量余量与遗忘清理 |
 | **v5.9.0** | 通用记忆引擎升级：结构化变化账本、记忆分层、写前召回与健康报告 |
 | **v5.7.0** | **字数检查系统 + 质量总分 + references 扩展**：<br/>**新增功能**：<br/>- `references/word-count-rules.md`: 字数检查规则<br/>- `references/chapter-guide.md`: 章节写作指南<br/>- `references/hook-techniques.md`: 悬念设置技巧<br/>- `references/quality-checklist.md`: 80分质量清单<br/>- `references/plot-structures.md`: 情节结构模板<br/>- `references/dialogue-writing.md`: 对话写作规范<br/>**升级功能**：<br/>- `checker-output-schema.md`: 增加总分汇总（80分制）<br/>- `core-constraints.md`: 引入四大核心法则<br/>- `webnovel-write`: 集成字数检查<br/>- `webnovel-review`: 集成字数检查和总分汇总 |
 | **v5.6.2** | **写作约束与审核增强**：<br/>**禁止具体日期**：`core-constraints.md` 新增禁止"仙历3021年三月十五日"等具体日期写法。<br/>**情节自然度检查**：`webnovel-review` 审核阶段自动检测关系跳跃、巧合过多、节奏太快，并建议触发 `/webnovel-adjust`。<br/>**铺垫章节插入**：`webnovel-adjust` 支持自动插入关系铺垫/事件铺垫章节。 |

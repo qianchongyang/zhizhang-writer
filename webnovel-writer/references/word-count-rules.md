@@ -60,7 +60,7 @@ purpose: 章节字数检查标准与异常处理指引
 {
   "metrics": {
     "word_count": 2156,
-    "word_count_status": "优秀",
+    "word_count_status": "excellent",
     "word_count_issue": null
   }
 }

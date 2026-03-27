@@ -298,7 +298,7 @@ def test_process_chapter_result_observer_reflector_pipeline_and_style_fatigue(te
     chapter_meta = manager._state["chapter_meta"]["0006"]
     assert chapter_meta["data_pipeline"]["mode"] == "observer_reflector"
     assert chapter_meta["observer_output"]["fact_count"] == 1
-    assert chapter_meta["style_fatigue"][0]["type"] == "generic"
+    assert chapter_meta["style_fatigue"][0]["type"] == "repetition"
     assert any(item.get("type") == "style_fatigue" for item in manager._state.get("review_checkpoints", []))
 
     story_memory = json.loads(temp_project.story_memory_file.read_text(encoding="utf-8"))

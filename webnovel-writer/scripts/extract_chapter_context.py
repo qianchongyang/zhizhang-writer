@@ -486,6 +486,37 @@ def _render_text(payload: Dict[str, Any]) -> str:
                 ch = row.get("ch") or row.get("chapter") or "?"
                 event = row.get("event") or row.get("content") or "—"
                 lines.append(f"  - Ch.{ch}: {event}")
+        temporal_window = story_recall.get("temporal_window") or {}
+        if temporal_window:
+            lines.append("- 时序窗口召回:")
+            lines.append(
+                f"  - 范围: Ch.{temporal_window.get('from_chapter') or '?'} ~ Ch.{temporal_window.get('to_chapter') or '?'}"
+            )
+            chapters = temporal_window.get("chapters") or []
+            if chapters:
+                lines.append("  - 章节切片:")
+                for row in chapters[:3]:
+                    if not isinstance(row, dict):
+                        continue
+                    lines.append(f"    - Ch.{row.get('chapter')}: {row.get('title') or '—'}")
+            state_changes = temporal_window.get("state_changes") or []
+            if state_changes:
+                lines.append("  - 窗口状态变化:")
+                for row in state_changes[:3]:
+                    if not isinstance(row, dict):
+                        continue
+                    lines.append(
+                        f"    - Ch.{row.get('chapter')}: {row.get('entity_id')}.{row.get('field')} {row.get('old_value')} -> {row.get('new_value')}"
+                    )
+            relationship_events = temporal_window.get("relationship_events") or []
+            if relationship_events:
+                lines.append("  - 窗口关系事件:")
+                for row in relationship_events[:3]:
+                    if not isinstance(row, dict):
+                        continue
+                    lines.append(
+                        f"    - Ch.{row.get('chapter')}: {row.get('from_entity')} -> {row.get('to_entity')} / {row.get('type')}"
+                    )
         archive_recall = story_recall.get("archive_recall") or {}
         if archive_recall:
             lines.append("- 归档召回:")

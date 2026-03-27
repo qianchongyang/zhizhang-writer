@@ -274,6 +274,23 @@ class DataModulesConfig:
     context_genre_profile_max_genres: int = 2
     context_emotional_arc_stale_gap: int = 6
     context_chapter_intent_max_items: int = 3
+    context_current_focus_auto_generate: bool = True
+    context_temporal_recall_enabled: bool = True
+    context_temporal_recall_lookback: int = 12
+    context_temporal_recall_chapter_limit: int = 3
+    context_temporal_recall_change_limit: int = 5
+    context_temporal_recall_relationship_limit: int = 5
+    context_temporal_recall_appearance_limit: int = 5
+    style_fatigue_warn_threshold: int = 3
+    style_fatigue_notice_threshold: int = 1
+    style_fatigue_known_types: tuple[str, ...] = (
+        "repetition",
+        "template",
+        "mechanical_emotion",
+        "mechanical_action",
+        "summary_narration",
+        "generic",
+    )
     context_genre_profile_separators: tuple[str, ...] = (
         "+",
         "/",

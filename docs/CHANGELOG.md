@@ -4,6 +4,27 @@
 
 ---
 
+## v5.18.0 (2026-03-27)
+
+**时序记忆增强**
+
+### 核心升级
+- `IndexManager` 新增时序窗口查询能力：按章节范围聚合章节切片、状态变化、关系事件和出场记录
+- `ContextManager` 写前召回接入 `story_recall.temporal_window`，可按最近章节窗口补充连续性事实
+- `extract_chapter_context` 文本输出新增“时序窗口召回”块，写前任务书能直接看到最近窗口变化
+- Dashboard “记忆与召回”页新增时序窗口摘要，默认展示章节范围、最近变化和关系事件
+
+### 体验优化
+- 长篇章节数增长后，写前上下文不再只依赖稳定记忆和归档，能补回最近几章的即时事实
+- 记忆页继续保持快扫模式，但现在可直接看到最近章节窗口的核心变化，不需要切到全量数据页
+
+### 验证
+- `test_data_modules.py`
+- `test_context_manager.py`
+- `test_extract_chapter_context.py`
+- `dashboard/tests/test_app.py`
+- `dashboard/frontend npm run build`
+
 ## v5.17.0 (2026-03-27)
 
 **InkOS 启发链路收口**

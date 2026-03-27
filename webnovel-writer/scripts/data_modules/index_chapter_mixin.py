@@ -62,6 +62,31 @@ class IndexChapterMixin:
                 for row in cursor.fetchall()
             ]
 
+    def get_chapters_in_window(
+        self,
+        from_chapter: int,
+        to_chapter: int,
+        limit: Optional[int] = None,
+    ) -> List[Dict]:
+        """按章节窗口获取章节元数据。"""
+        if limit is None:
+            limit = self.config.context_temporal_recall_chapter_limit
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM chapters
+                WHERE chapter >= ? AND chapter <= ?
+                ORDER BY chapter DESC
+                LIMIT ?
+            """,
+                (int(from_chapter), int(to_chapter), int(limit)),
+            )
+            return [
+                self._row_to_dict(row, parse_json=["characters"])
+                for row in cursor.fetchall()
+            ]
+
     # ==================== 场景操作 ====================
 
     def add_scenes(self, chapter: int, scenes: List[SceneMeta]):
@@ -231,6 +256,31 @@ class IndexChapterMixin:
                 for row in cursor.fetchall()
             ]
 
+    def get_appearances_in_window(
+        self,
+        from_chapter: int,
+        to_chapter: int,
+        limit: Optional[int] = None,
+    ) -> List[Dict]:
+        """按章节窗口获取实体出场。"""
+        if limit is None:
+            limit = self.config.context_temporal_recall_appearance_limit
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM appearances
+                WHERE chapter >= ? AND chapter <= ?
+                ORDER BY chapter DESC, confidence DESC, id DESC
+                LIMIT ?
+            """,
+                (int(from_chapter), int(to_chapter), int(limit)),
+            )
+            return [
+                self._row_to_dict(row, parse_json=["mentions"])
+                for row in cursor.fetchall()
+            ]
+
     # ==================== v5.1 实体操作 ====================
 
     def process_chapter_data(
@@ -299,4 +349,3 @@ class IndexChapterMixin:
         return stats
 
     # ==================== 辅助方法 ====================
-

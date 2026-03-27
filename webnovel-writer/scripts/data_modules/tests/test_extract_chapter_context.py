@@ -247,6 +247,13 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
             "character_focus": [{"name": "萧炎", "current_state": "斗王", "last_update_chapter": 9}],
             "emotional_focus": [{"name": "萧炎", "emotional_state": "压抑", "trigger_event": "旧伤复发"}],
             "structured_change_focus": [{"ch": 9, "entity_id": "xiaoyan", "field": "灵石", "change_kind": "resource_change", "old_value": "100", "new_value": "150", "delta": 50}],
+            "temporal_window": {
+                "from_chapter": 7,
+                "to_chapter": 9,
+                "chapters": [{"chapter": 9, "title": "第9章：旧线回响"}],
+                "state_changes": [{"chapter": 9, "entity_id": "xiaoyan", "field": "realm", "old_value": "斗者", "new_value": "斗师"}],
+                "relationship_events": [{"chapter": 9, "from_entity": "xiaoyan", "to_entity": "yaolao", "type": "师徒"}],
+            },
             "archive_recall": {
                 "plot_threads": [{"content": "旧玉佩来历", "memory_tier": "archive", "archive_score": 3}],
                 "recent_events": [{"ch": 5, "event": "找到旧玉佩"}],
@@ -300,6 +307,9 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
     assert "玄铁令" in text
     assert "- 归档召回:" in text
     assert "- 情绪弧线:" in text
+    assert "- 时序窗口召回:" in text
+    assert "范围: Ch.7 ~ Ch.9" in text
+    assert "窗口状态变化" in text
     assert "萧炎: 压抑 / stable（触发: 旧伤复发" in text
     assert "旧玉佩来历" in text
     assert "结构化变化账本" in text

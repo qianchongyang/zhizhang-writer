@@ -113,6 +113,7 @@ def create_app(project_root: str | Path | None = None) -> FastAPI:
             "genre_profile": {},
             "style_fatigue": {},
             "workflow_trace": _load_workflow_trace(),
+            "workflow_timeline": _load_workflow_timeline(),
             "diagnostics": {"degraded": False, "reason": ""},
         }
 
@@ -551,6 +552,59 @@ def _load_workflow_trace() -> Dict[str, Any]:
     return {}
 
 
+def _load_workflow_timeline() -> list[Dict[str, Any]]:
+    workflow_state = _load_json_optional(_webnovel_dir() / "workflow_state.json")
+    timeline: list[Dict[str, Any]] = []
+    current_task = workflow_state.get("current_task") if isinstance(workflow_state, dict) else {}
+    if isinstance(current_task, dict):
+        for step in current_task.get("completed_steps") or []:
+            if isinstance(step, dict):
+                timeline.append(
+                    {
+                        "id": step.get("id"),
+                        "name": step.get("name"),
+                        "status": step.get("status"),
+                        "updated_at": step.get("completed_at") or step.get("started_at"),
+                    }
+                )
+        current_step = current_task.get("current_step")
+        if isinstance(current_step, dict):
+            timeline.append(
+                {
+                    "id": current_step.get("id"),
+                    "name": current_step.get("name"),
+                    "status": current_step.get("status"),
+                    "updated_at": current_step.get("started_at"),
+                }
+            )
+        if not timeline and isinstance(current_task.get("workflow_trace"), dict):
+            trace = current_task.get("workflow_trace") or {}
+            timeline.append(
+                {
+                    "id": trace.get("stage"),
+                    "name": trace.get("stage"),
+                    "status": trace.get("status"),
+                    "updated_at": trace.get("updated_at"),
+                }
+            )
+    if timeline:
+        return timeline[-6:]
+    history = workflow_state.get("history") if isinstance(workflow_state, dict) else []
+    if isinstance(history, list) and history:
+        last = history[-1] if isinstance(history[-1], dict) else {}
+        trace = last.get("workflow_trace") if isinstance(last, dict) else {}
+        if isinstance(trace, dict) and trace:
+            return [
+                {
+                    "id": trace.get("stage"),
+                    "name": trace.get("stage"),
+                    "status": trace.get("status"),
+                    "updated_at": trace.get("updated_at") or last.get("completed_at"),
+                }
+            ]
+    return []
+
+
 def _fallback_chapter_outline(project_root: Path, chapter: int) -> str:
     try:
         from chapter_outline_loader import load_chapter_outline
@@ -646,6 +700,12 @@ def _build_style_fatigue_signal(state: Dict[str, Any]) -> Dict[str, Any]:
         issues = []
     count = len(issues)
     status = "clean"
+    type_counts: Dict[str, int] = {}
+    for item in issues:
+        if not isinstance(item, dict):
+            continue
+        item_type = str(item.get("type") or item.get("issue_type") or "generic")
+        type_counts[item_type] = int(type_counts.get(item_type) or 0) + 1
     if count >= 3:
         status = "warn"
     elif count > 0:
@@ -653,6 +713,8 @@ def _build_style_fatigue_signal(state: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "count": count,
         "status": status,
+        "type_counts": type_counts,
+        "dominant_type": max(type_counts, key=type_counts.get) if type_counts else "",
         "issues": issues[:5],
     }
 

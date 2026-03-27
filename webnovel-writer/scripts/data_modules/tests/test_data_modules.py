@@ -622,6 +622,39 @@ class TestIndexManager:
         assert stats["scenes"] == 1
         assert stats["appearances"] == 1
 
+    def test_temporal_window_queries(self, temp_project):
+        manager = IndexManager(temp_project)
+        manager.add_chapter(ChapterMeta(chapter=8, title="第8章", location="宗门", word_count=3000, characters=["萧炎"]))
+        manager.add_chapter(ChapterMeta(chapter=9, title="第9章", location="山谷", word_count=3200, characters=["萧炎", "药老"]))
+        manager.record_appearance("xiaoyan", 9, ["萧炎"], 1.0)
+        manager.record_state_change(
+            StateChangeMeta(
+                entity_id="xiaoyan",
+                field="realm",
+                old_value="斗者",
+                new_value="斗师",
+                reason="突破",
+                chapter=9,
+            )
+        )
+        manager.record_relationship_event(
+            index_manager_module.RelationshipEventMeta(
+                from_entity="xiaoyan",
+                to_entity="yaolao",
+                type="师徒",
+                chapter=9,
+                description="正式拜师",
+            )
+        )
+
+        window = manager.get_temporal_window(current_chapter=10, lookback=3, entity_id="xiaoyan")
+        assert window["from_chapter"] == 7
+        assert window["to_chapter"] == 9
+        assert any(item["chapter"] == 9 for item in window["chapters"])
+        assert any(item["entity_id"] == "xiaoyan" for item in window["state_changes"])
+        assert any(item["from_entity"] == "xiaoyan" for item in window["relationship_events"])
+        assert any(item["entity_id"] == "xiaoyan" for item in window["appearances"])
+
     def test_debt_and_override_flow(self, temp_project):
         manager = IndexManager(temp_project)
 
@@ -950,6 +983,10 @@ class TestIndexManager:
     def test_index_manager_cli(self, temp_project, monkeypatch, capsys):
         root = str(temp_project.project_root)
         manager = IndexManager(temp_project)
+        temp_project.state_file.write_text(
+            json.dumps({"progress": {"current_chapter": 1, "total_words": 0}}, ensure_ascii=False),
+            encoding="utf-8",
+        )
 
         # 基础数据
         manager.upsert_entity(

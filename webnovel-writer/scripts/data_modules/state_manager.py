@@ -1522,9 +1522,17 @@ class StateManager:
                 continue
             if not isinstance(item, dict):
                 continue
+            item_type = str(
+                item.get("issue_type")
+                or item.get("type")
+                or item.get("kind")
+                or "generic"
+            ).strip() or "generic"
+            if item_type not in set(getattr(self.config, "style_fatigue_known_types", ()) or ()):
+                item_type = "generic"
             normalized.append(
                 {
-                    "type": str(item.get("type") or item.get("kind") or "generic"),
+                    "type": item_type,
                     "example": str(item.get("example") or item.get("excerpt") or item.get("text") or ""),
                     "suggestion": str(item.get("suggestion") or item.get("rewrite_hint") or ""),
                     "confidence": float(item.get("confidence") or 0.7),

@@ -131,6 +131,7 @@ function DashboardPage({ data, onNavigate }) {
     const chapterIntent = data.chapter_intent || {}
     const styleFatigue = data.style_fatigue || {}
     const workflowTrace = data.workflow_trace || {}
+    const workflowTimeline = data.workflow_timeline || []
     const readerSignal = data.reader_signal || {}
     const genreProfile = data.genre_profile || {}
     const chapterOutline = data.chapter_outline || ''
@@ -219,6 +220,12 @@ function DashboardPage({ data, onNavigate }) {
                                     </ul>
                                 </div>
                             ) : null}
+                            {chapterIntent.focus_title === '自动聚焦' ? (
+                                <div className="entity-current-block">
+                                    <strong>焦点来源：</strong>
+                                    <p className="entity-desc">当前未检测到手工 `current_focus`，已按大纲、召回和写作建议自动生成。</p>
+                                </div>
+                            ) : null}
                             <p className="entity-desc">{chapterOutline || '暂无本章大纲'}</p>
                             {Array.isArray(writingGuidance.guidance_items) && writingGuidance.guidance_items.length > 0 ? (
                                 <div className="entity-current-block">
@@ -295,6 +302,18 @@ function DashboardPage({ data, onNavigate }) {
                                     </ul>
                                 </>
                             ) : null}
+                            {styleFatigue.count > 0 ? (
+                                <>
+                                    <div className="card-header-inline">
+                                        <strong>语言疲劳类型</strong>
+                                    </div>
+                                    <ul className="summary-list compact">
+                                        {Object.entries(styleFatigue.type_counts || {}).map(([key, value]) => (
+                                            <li key={key}>{key} · {value}</li>
+                                        ))}
+                                    </ul>
+                                </>
+                            ) : null}
                         </div>
                     </div>
                 </div>
@@ -354,6 +373,19 @@ function DashboardPage({ data, onNavigate }) {
                             <p><strong>最近审查均分：</strong>{readerSignal.review_trend?.overall_avg ?? '—'}</p>
                             <p><strong>低分区间：</strong>{Array.isArray(readerSignal.low_score_ranges) ? readerSignal.low_score_ranges.length : 0}</p>
                             <p><strong>语言疲劳：</strong>{styleFatigue.count || 0}</p>
+                            <p><strong>主类型：</strong>{styleFatigue.dominant_type || '—'}</p>
+                            {workflowTimeline.length > 0 ? (
+                                <>
+                                    <div className="card-header-inline">
+                                        <strong>流程时间线</strong>
+                                    </div>
+                                    <ul className="summary-list compact">
+                                        {workflowTimeline.map((item, index) => (
+                                            <li key={index}>{item.id || item.name || 'step'} · {item.status || 'unknown'}</li>
+                                        ))}
+                                    </ul>
+                                </>
+                            ) : null}
                         </div>
                     </div>
                 </div>
@@ -369,9 +401,11 @@ function MemoryRecallPage({ data, onNavigate }) {
     const memoryHealth = data.memory_health || {}
     const writingGuidance = data.writing_guidance || {}
     const archiveRecall = storyRecall.archive_recall || {}
+    const temporalWindow = storyRecall.temporal_window || {}
     const recallPolicy = storyRecall.recall_policy || {}
     const memorySections = [
         { id: 'recall-priority', label: '高优先级召回' },
+        { id: 'recall-window', label: '时序窗口' },
         { id: 'recall-archive', label: '归档召回' },
         { id: 'recall-health', label: '记忆健康' },
         { id: 'recall-guidance', label: '写作建议' },
@@ -426,6 +460,15 @@ function MemoryRecallPage({ data, onNavigate }) {
                         <span className="stat-sub">recent events {memoryHealth.recent_events_count || 0}</span>
                     </div>
                     <div className="memory-summary-item">
+                        <span className="stat-label">时序窗口</span>
+                        <span className="stat-value plain">
+                            {temporalWindow.to_chapter ? `Ch.${temporalWindow.from_chapter || 0}-${temporalWindow.to_chapter}` : '未启用'}
+                        </span>
+                        <span className="stat-sub">
+                            章节 {temporalWindow.chapters?.length || 0} · 变化 {temporalWindow.state_changes?.length || 0}
+                        </span>
+                    </div>
+                    <div className="memory-summary-item">
                         <span className="stat-label">写作评分</span>
                         <span className="stat-value plain">{writingGuidance.checklist_score?.score ?? '—'}</span>
                         <span className="stat-sub">completion {writingGuidance.checklist_score?.completion_rate ?? '—'}</span>
@@ -454,6 +497,54 @@ function MemoryRecallPage({ data, onNavigate }) {
                                 </ul>
                             ) : <p>暂无活跃召回信号。</p>}
                         </div>
+                    </div>
+
+                    <div className="card dashboard-section-card" id="recall-window">
+                        <div className="card-header">
+                            <span className="card-title">时序窗口</span>
+                            <span className="card-badge badge-cyan">
+                                {temporalWindow.to_chapter ? `Ch.${temporalWindow.from_chapter || 0}-${temporalWindow.to_chapter}` : '未启用'}
+                            </span>
+                        </div>
+                        {temporalWindow.to_chapter ? (
+                            <div className="entity-detail">
+                                <p><strong>用途：</strong>补最近章节的事实切片，优先帮助当前章校正连续性和即时状态。</p>
+                                {temporalWindow.chapters?.length > 0 ? (
+                                    <div className="entity-current-block">
+                                        <strong>章节切片：</strong>
+                                        <ul className="summary-list compact">
+                                            {temporalWindow.chapters.slice(0, 3).map((item, index) => (
+                                                <li key={index}>Ch.{item.chapter || '?'}: {item.title || '未命名章节'}</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                ) : null}
+                                {temporalWindow.state_changes?.length > 0 ? (
+                                    <div className="entity-current-block">
+                                        <strong>最近变化：</strong>
+                                        <ul className="summary-list compact">
+                                            {temporalWindow.state_changes.slice(0, 4).map((item, index) => (
+                                                <li key={index}>
+                                                    Ch.{item.chapter || '?'} · {item.entity_id || '—'}.{item.field || '—'}: {item.old_value || '—'} → {item.new_value || '—'}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                ) : null}
+                                {temporalWindow.relationship_events?.length > 0 ? (
+                                    <details className="memory-details">
+                                        <summary>关系事件 {temporalWindow.relationship_events.length} 条</summary>
+                                        <ul className="summary-list compact">
+                                            {temporalWindow.relationship_events.slice(0, 4).map((item, index) => (
+                                                <li key={index}>
+                                                    Ch.{item.chapter || '?'} · {item.from_entity || '—'} → {item.to_entity || '—'} / {item.type || item.event_type || '关系事件'}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </details>
+                                ) : null}
+                            </div>
+                        ) : <div className="empty-state compact"><p>当前章节没有时序窗口补召回。</p></div>}
                     </div>
 
                     <div className="card dashboard-section-card" id="recall-archive">

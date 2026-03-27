@@ -337,9 +337,9 @@ class ContextManager:
         story_memory_content = dict(story_memory_bundle.get("content") or {})
         story_memory_meta = dict(story_memory_bundle.get("meta") or {})
         chapter_outline = self._load_outline(chapter)
+        story_recall = self._build_story_recall(chapter, chapter_outline, state, story_memory_content, story_memory_meta)
         author_intent = self._load_control_object(self._author_intent_path())
         current_focus = self._load_control_object(self._current_focus_path())
-        story_recall = self._build_story_recall(chapter, chapter_outline, state, story_memory_content, story_memory_meta)
         core = {
             "chapter_outline": chapter_outline,
             "protagonist_snapshot": state.get("protagonist_state", {}),
@@ -384,6 +384,16 @@ class ContextManager:
         reader_signal = self._load_reader_signal(chapter)
         genre_profile = self._load_genre_profile(state)
         writing_guidance = self._build_writing_guidance(chapter, reader_signal, genre_profile)
+        current_focus = self._resolve_current_focus(
+            chapter=chapter,
+            chapter_outline=chapter_outline,
+            story_recall=story_recall,
+            state=state,
+            author_intent=author_intent,
+            current_focus=current_focus,
+            writing_guidance=writing_guidance,
+        )
+        memory["current_focus"] = current_focus
         chapter_intent = self._build_chapter_intent(
             chapter=chapter,
             chapter_outline=chapter_outline,
@@ -596,6 +606,73 @@ class ContextManager:
         text = re.sub(r"^#+\s*", "", text)
         return text[:120].strip()
 
+    def _resolve_current_focus(
+        self,
+        chapter: int,
+        chapter_outline: str,
+        story_recall: Dict[str, Any],
+        state: Dict[str, Any],
+        author_intent: Dict[str, Any],
+        current_focus: Dict[str, Any],
+        writing_guidance: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        if isinstance(current_focus, dict) and any(current_focus.get(key) for key in ("title", "goal", "must_resolve")):
+            return current_focus
+        if not bool(getattr(self.config, "context_current_focus_auto_generate", True)):
+            return current_focus or {}
+
+        must_resolve: List[str] = []
+        for item in (story_recall.get("priority_foreshadowing") or [])[:2]:
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get("name") or item.get("content") or item.get("event") or "").strip()
+            if label:
+                must_resolve.append(label)
+        for item in (writing_guidance.get("guidance_items") or [])[:2]:
+            text = str(item).strip()
+            if text and text not in must_resolve:
+                must_resolve.append(text)
+
+        generated = {
+            "title": "自动聚焦",
+            "goal": self._clean_outline_goal(chapter_outline) or f"第 {chapter} 章优先推进当前主线",
+            "must_resolve": must_resolve[:3],
+            "hard_constraints": list(author_intent.get("hard_constraints") or [])[:3] if isinstance(author_intent, dict) else [],
+            "generated": True,
+        }
+        protagonist_name = str(((state.get("protagonist_state") or {}).get("name")) or "").strip()
+        if protagonist_name:
+            generated["focus_character"] = protagonist_name
+        return generated
+
+    def _detect_emotional_continuity_risks(
+        self,
+        chapter: int,
+        chapter_goal: str,
+        protagonist_name: str,
+        emotional_arcs: Dict[str, Any],
+    ) -> List[str]:
+        if not protagonist_name or not isinstance(emotional_arcs, dict):
+            return []
+        rows = emotional_arcs.get(protagonist_name) or []
+        if not isinstance(rows, list) or not rows:
+            return []
+        latest = rows[-1] if isinstance(rows[-1], dict) else {}
+        if not latest:
+            return []
+        latest_state = str(latest.get("emotional_state") or "").strip()
+        latest_chapter = int(latest.get("chapter") or 0)
+        stale_gap = max(0, chapter - latest_chapter)
+        risks: List[str] = []
+        if stale_gap >= int(getattr(self.config, "context_emotional_arc_stale_gap", 6) or 6):
+            risks.append(f"{protagonist_name} 的情绪弧线已 {stale_gap} 章未更新")
+        lowered = chapter_goal.lower()
+        positive_cues = ("庆功", "甜", "轻松", "温馨", "和解", "表白", "胜利", "喜")
+        negative_states = ("压抑", "愤怒", "悲伤", "恐惧", "痛苦", "绝望")
+        if latest_state and latest_state in negative_states and any(cue in lowered for cue in positive_cues):
+            risks.append(f"{protagonist_name} 当前情绪为“{latest_state}”，与本章目标语气可能冲突")
+        return risks
+
     def _build_chapter_intent(
         self,
         chapter: int,
@@ -664,13 +741,14 @@ class ContextManager:
 
         protagonist_name = str(((state.get("protagonist_state") or {}).get("name")) or "").strip()
         emotional_arcs = story_memory.get("emotional_arcs") or {}
-        if protagonist_name and isinstance(emotional_arcs, dict):
-            protagonist_arcs = emotional_arcs.get(protagonist_name) or []
-            if isinstance(protagonist_arcs, list) and protagonist_arcs:
-                last_arc = protagonist_arcs[-1]
-                stale_gap = max(0, chapter - int(last_arc.get("chapter") or 0))
-                if stale_gap >= int(getattr(self.config, "context_emotional_arc_stale_gap", 6) or 6):
-                    story_risks.append(f"{protagonist_name} 的情绪弧线已 {stale_gap} 章未更新")
+        for risk in self._detect_emotional_continuity_risks(
+            chapter=chapter,
+            chapter_goal=chapter_goal,
+            protagonist_name=protagonist_name,
+            emotional_arcs=emotional_arcs if isinstance(emotional_arcs, dict) else {},
+        ):
+            if risk not in story_risks:
+                story_risks.append(risk)
 
         for item in (writing_guidance.get("guidance_items") or [])[:2]:
             text = str(item).strip()
@@ -1025,6 +1103,7 @@ class ContextManager:
         recent_events = story_memory.get("recent_events", [])
         if not isinstance(recent_events, list):
             recent_events = []
+        temporal_window: Dict[str, Any] = {}
         emotional_arcs = story_memory.get("emotional_arcs", {})
         if not isinstance(emotional_arcs, dict):
             emotional_arcs = {}
@@ -1050,6 +1129,22 @@ class ContextManager:
         protagonist_state = state.get("protagonist_state", {}) if isinstance(state, dict) else {}
         if isinstance(protagonist_state, dict):
             protagonist_name = str(protagonist_state.get("name") or "").strip()
+
+        if bool(getattr(self.config, "context_temporal_recall_enabled", True)) and chapter > 1:
+            protagonist_entity_id = ""
+            if protagonist_name:
+                protagonist = self.index_manager.get_protagonist()
+                if isinstance(protagonist, dict):
+                    protagonist_entity_id = str(protagonist.get("id") or "").strip()
+            temporal_window = self.index_manager.get_temporal_window(
+                current_chapter=chapter,
+                lookback=int(getattr(self.config, "context_temporal_recall_lookback", 12) or 12),
+                entity_id=protagonist_entity_id or None,
+                chapter_limit=int(getattr(self.config, "context_temporal_recall_chapter_limit", 3) or 3),
+                state_change_limit=int(getattr(self.config, "context_temporal_recall_change_limit", 5) or 5),
+                relationship_limit=int(getattr(self.config, "context_temporal_recall_relationship_limit", 5) or 5),
+                appearance_limit=int(getattr(self.config, "context_temporal_recall_appearance_limit", 5) or 5),
+            )
 
         def _thread_sort_key(item: Dict[str, Any]) -> tuple:
             urgency = item.get("urgency")
@@ -1180,6 +1275,8 @@ class ContextManager:
             int(chapter or 0) - int(story_memory_meta.get("last_consolidated_chapter") or 0),
         )
         signal_count = len(priority_foreshadowing) + len(character_focus) + len(structured_change_focus) + len(recent_events) + len(emotional_focus)
+        if temporal_window:
+            signal_count += len(temporal_window.get("state_changes") or [])
         recall_reasons: List[str] = []
         if not memory_presence:
             recall_mode = "off"
@@ -1380,6 +1477,7 @@ class ContextManager:
             "character_focus": character_focus[:5],
             "emotional_focus": emotional_focus[:3],
             "structured_change_focus": structured_change_focus,
+            "temporal_window": temporal_window,
             "archive_recall": archive_recall if any(archive_recall.values()) else {},
         }
 

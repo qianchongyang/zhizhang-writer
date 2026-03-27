@@ -6,6 +6,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from dashboard.app import create_app
+from data_modules.config import DataModulesConfig
+from data_modules.index_manager import IndexManager, ChapterMeta, EntityMeta, StateChangeMeta
 
 
 def _build_project_root(tmp_path: Path) -> Path:
@@ -29,7 +31,7 @@ def _build_project_root(tmp_path: Path) -> Path:
                     "target_chapters": 10,
                 },
                 "progress": {
-                    "current_chapter": 1,
+                    "current_chapter": 4,
                     "current_volume": 1,
                     "total_words": 1234,
                     "volumes_planned": [{"volume": 1, "chapters_range": "1-10"}],
@@ -117,21 +119,46 @@ def _build_project_root(tmp_path: Path) -> Path:
     (webnovel / "workflow_state.json").write_text(
         json.dumps(
             {
-                "current_task": {
-                    "workflow_trace": {
-                        "run_id": "run_001",
-                        "stage": "step_1_context",
-                        "status": "running",
-                        "chapter": 1,
-                    }
+                    "current_task": {
+                        "workflow_trace": {
+                            "run_id": "run_001",
+                            "stage": "step_1_context",
+                            "status": "running",
+                            "chapter": 4,
+                        }
+                    },
+                    "history": [],
                 },
-                "history": [],
-            },
             ensure_ascii=False,
         ),
         encoding="utf-8",
     )
-    (outline_dir / "第1卷-详细大纲.md").write_text("### 第1章：测试标题\n测试大纲", encoding="utf-8")
+    (outline_dir / "第1卷-详细大纲.md").write_text("### 第4章：测试标题\n测试大纲", encoding="utf-8")
+    cfg = DataModulesConfig.from_project_root(root)
+    idx = IndexManager(cfg)
+    idx.upsert_entity(
+        EntityMeta(
+            id="xiaoyan",
+            type="角色",
+            canonical_name="萧炎",
+            current={"realm": "筑基"},
+            first_appearance=1,
+            last_appearance=4,
+            is_protagonist=True,
+        )
+    )
+    idx.add_chapter(ChapterMeta(chapter=2, title="旧线回响", location="宗门", word_count=2800, characters=["萧炎"], summary="回收前章冲突"))
+    idx.add_chapter(ChapterMeta(chapter=3, title="追查来历", location="宗门", word_count=3200, characters=["萧炎"], summary="推进身世线索"))
+    idx.record_state_change(
+        StateChangeMeta(
+            entity_id="xiaoyan",
+            field="境界",
+            old_value="炼气",
+            new_value="筑基",
+            chapter=3,
+            reason="突破",
+        )
+    )
     return root
 
 
@@ -146,10 +173,16 @@ def test_dashboard_summary_returns_cockpit_data(tmp_path):
     data = response.json()
     assert data["project_info"]["title"] == "测试项目"
     assert "测试大纲" in data["chapter_outline"]
-    assert data["memory_health"]["current_chapter"] == 1
+    assert data["memory_health"]["current_chapter"] == 4
     assert "recall_policy" in data["story_recall"]
     assert isinstance(data["story_recall"]["priority_foreshadowing"], list)
+    assert data["story_recall"]["temporal_window"]["from_chapter"] == 1
+    assert data["story_recall"]["temporal_window"]["to_chapter"] == 3
+    assert data["story_recall"]["temporal_window"]["state_changes"][0]["field"] == "境界"
     assert data["chapter_intent"]["focus_title"] == "推进主线"
     assert data["style_fatigue"]["count"] == 1
+    assert data["style_fatigue"]["dominant_type"] == "repetition"
     assert data["workflow_trace"]["stage"] == "step_1_context"
+    assert isinstance(data["workflow_timeline"], list)
+    assert data["workflow_timeline"]
     assert "diagnostics" in data

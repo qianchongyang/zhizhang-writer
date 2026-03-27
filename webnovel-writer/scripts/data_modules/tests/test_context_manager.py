@@ -13,6 +13,8 @@ from data_modules.config import DataModulesConfig
 from data_modules.index_manager import (
     IndexManager,
     EntityMeta,
+    ChapterMeta,
+    StateChangeMeta,
     ChapterReadingPowerMeta,
     ReviewMetrics,
 )
@@ -263,6 +265,95 @@ def test_context_manager_builds_chapter_intent_with_current_focus_and_emotion(te
     assert "不要扩写新支线" in chapter_intent["hard_constraints"]
     assert any("情绪弧线" in item for item in chapter_intent["story_risks"])
     assert story_recall["emotional_focus"][0]["name"] == "萧炎"
+
+
+def test_context_manager_auto_generates_current_focus_when_missing(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 6,
+                "characters": {"萧炎": {"current_state": "忍耐", "last_update_chapter": 6}},
+                "emotional_arcs": {
+                    "萧炎": [
+                        {"chapter": 6, "emotional_state": "压抑", "emotional_trend": "down", "trigger_event": "旧伤"}
+                    ]
+                },
+                "plot_threads": [{"name": "身世线", "status": "pending", "tier": "核心", "urgency": 90}],
+                "recent_events": [{"ch": 6, "event": "旧伤复发"}],
+                "structured_change_ledger": [],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    temp_project.outline_dir.mkdir(parents=True, exist_ok=True)
+    (temp_project.outline_dir / "第1卷-详细大纲.md").write_text(
+        "### 第7章：测试标题\n本章庆功宴上追查身世线第一层答案。",
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(7, use_snapshot=False, save_snapshot=False)
+    memory = payload["sections"]["memory"]["content"]
+    chapter_intent = payload["sections"]["chapter_intent"]["content"]
+
+    assert memory["current_focus"]["generated"] is True
+    assert chapter_intent["focus_title"] == "自动聚焦"
+    assert "身世线" in "".join(chapter_intent["must_resolve"])
+    assert any("情绪" in item for item in chapter_intent["story_risks"])
+
+
+def test_context_manager_includes_temporal_window_recall(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    idx = IndexManager(temp_project)
+    idx.upsert_entity(
+        EntityMeta(
+            id="xiaoyan",
+            type="角色",
+            canonical_name="萧炎",
+            current={},
+            first_appearance=1,
+            last_appearance=9,
+            is_protagonist=True,
+        ),
+        update_metadata=True,
+    )
+    idx.add_chapter(ChapterMeta(chapter=9, title="第9章", location="山谷", word_count=3200, characters=["萧炎"]))
+    idx.record_appearance("xiaoyan", 9, ["萧炎"], 1.0)
+    idx.record_state_change(
+        StateChangeMeta(
+            entity_id="xiaoyan",
+            field="realm",
+            old_value="斗者",
+            new_value="斗师",
+            reason="突破",
+            chapter=9,
+        )
+    )
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(10, use_snapshot=False, save_snapshot=False)
+    story_recall = payload["sections"]["story_recall"]["content"]
+
+    assert story_recall["temporal_window"]["to_chapter"] == 9
+    assert any(item["chapter"] == 9 for item in story_recall["temporal_window"]["chapters"])
+    assert any(item["entity_id"] == "xiaoyan" for item in story_recall["temporal_window"]["state_changes"])
 
 
 def test_context_manager_invalidation_on_story_memory_version_change(temp_project):

@@ -374,6 +374,32 @@ class IndexEntityMixin:
             )
             return [dict(row) for row in cursor.fetchall()]
 
+    def get_state_changes_in_window(
+        self,
+        from_chapter: int,
+        to_chapter: int,
+        limit: int = 50,
+        entity_id: Optional[str] = None,
+    ) -> List[Dict]:
+        """按章节窗口获取状态变化。"""
+        clauses = ["chapter >= ?", "chapter <= ?"]
+        params: List[Any] = [int(from_chapter), int(to_chapter)]
+        if entity_id:
+            clauses.append("entity_id = ?")
+            params.append(str(entity_id))
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                SELECT * FROM state_changes
+                WHERE {' AND '.join(clauses)}
+                ORDER BY chapter DESC, id DESC
+                LIMIT ?
+            """,
+                (*params, int(limit)),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
     def get_chapter_state_changes(self, chapter: int) -> List[Dict]:
         """获取某章的所有状态变化"""
         with self._get_conn() as conn:
@@ -675,6 +701,68 @@ class IndexEntityMixin:
                 (*params, int(limit)),
             )
             return [dict(row) for row in cursor.fetchall()]
+
+    def get_relationship_events_in_window(
+        self,
+        from_chapter: int,
+        to_chapter: int,
+        limit: int = 100,
+        entity_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """按章节窗口获取关系事件。"""
+        clauses = ["chapter >= ?", "chapter <= ?"]
+        params: List[Any] = [int(from_chapter), int(to_chapter)]
+        if entity_id:
+            clauses.append("(from_entity = ? OR to_entity = ?)")
+            params.extend([str(entity_id), str(entity_id)])
+        with self._get_conn() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                SELECT * FROM relationship_events
+                WHERE {' AND '.join(clauses)}
+                ORDER BY chapter DESC, id DESC
+                LIMIT ?
+            """,
+                (*params, int(limit)),
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_temporal_window(
+        self,
+        current_chapter: int,
+        lookback: int = 12,
+        entity_id: Optional[str] = None,
+        chapter_limit: Optional[int] = None,
+        state_change_limit: Optional[int] = None,
+        relationship_limit: Optional[int] = None,
+        appearance_limit: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """按章节窗口聚合最近事实，用于长篇写前召回。"""
+        end_chapter = max(1, int(current_chapter) - 1)
+        start_chapter = max(1, end_chapter - max(0, int(lookback)) + 1)
+        return {
+            "from_chapter": start_chapter,
+            "to_chapter": end_chapter,
+            "chapters": self.get_chapters_in_window(start_chapter, end_chapter, chapter_limit),
+            "state_changes": self.get_state_changes_in_window(
+                start_chapter,
+                end_chapter,
+                limit=int(state_change_limit or self.config.context_temporal_recall_change_limit),
+                entity_id=entity_id,
+            ),
+            "relationship_events": self.get_relationship_events_in_window(
+                start_chapter,
+                end_chapter,
+                limit=int(relationship_limit or self.config.context_temporal_recall_relationship_limit),
+                entity_id=entity_id,
+            ),
+            "appearances": self.get_appearances_in_window(
+                start_chapter,
+                end_chapter,
+                limit=int(appearance_limit or self.config.context_temporal_recall_appearance_limit),
+            ),
+        }
 
     def _load_effective_relationship_edges(
         self,

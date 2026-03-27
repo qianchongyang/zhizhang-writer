@@ -99,6 +99,17 @@ cat "${SKILL_ROOT}/references/pacing-control.md"
 cat "$PROJECT_ROOT/.webnovel/state.json"
 ```
 
+若存在以下文件，也应一并读取用于审查：
+
+```bash
+cat "$PROJECT_ROOT/.webnovel/memory/story_memory.json"
+cat "$PROJECT_ROOT/.webnovel/control/current_focus.json"
+```
+
+补充审查点：
+- 情绪连续性：当前章行为/目标是否与最近 `emotional_arcs` 明显冲突
+- 语言疲劳：是否存在重复表达、模板句、机械动作、总结式叙述
+
 ## Step 3: 并行调用检查员（Task）
 
 **调用约束**:
@@ -155,6 +166,10 @@ cat "$PROJECT_ROOT/.webnovel/state.json"
 
 ## 改进建议
 - 可执行的修复建议
+
+## 附加信号
+- 情绪连续性：{正常/警告/冲突}
+- 语言疲劳：{0-N} 项
 ```
 
 **审查指标 JSON（用于趋势统计）**:

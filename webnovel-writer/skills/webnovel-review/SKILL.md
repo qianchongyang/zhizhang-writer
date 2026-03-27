@@ -127,6 +127,11 @@ cat "$PROJECT_ROOT/.webnovel/state.json"
 - 爽点密度 / 设定一致性 / 节奏控制 / 人物塑造 / 连贯性 / 追读力
 - 总评与等级
 
+## 字数检查
+- 字数：{word_count} 字
+- 状态：{word_count_status}
+- 建议：{word_count_issue 或 "无"}
+
 ## 修改优先级
 - 🔴 高优先级（必须修改）
 - 🟠 中优先级（建议修改）

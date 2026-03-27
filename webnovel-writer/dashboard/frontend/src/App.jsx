@@ -62,8 +62,8 @@ export default function App() {
             </aside>
 
             <main className="main-content">
-                {page === 'dashboard' && <DashboardPage data={dashboardData} key={refreshKey} />}
-                {page === 'memory' && <MemoryRecallPage data={dashboardData} key={refreshKey} />}
+                {page === 'dashboard' && <DashboardPage data={dashboardData} key={refreshKey} onNavigate={setPage} />}
+                {page === 'memory' && <MemoryRecallPage data={dashboardData} key={refreshKey} onNavigate={setPage} />}
                 {page === 'entities' && <EntitiesPage key={refreshKey} />}
                 {page === 'graph' && <GraphPage key={refreshKey} />}
                 {page === 'chapters' && <ChaptersPage key={refreshKey} />}
@@ -118,7 +118,7 @@ const FULL_DATA_DOMAINS = [
 // 页面 1：数据总览
 // ====================================================================
 
-function DashboardPage({ data }) {
+function DashboardPage({ data, onNavigate }) {
     if (!data) return <div className="loading">加载中…</div>
 
     const info = data.project_info || {}
@@ -150,6 +150,12 @@ function DashboardPage({ data }) {
     const healthStatus = memoryHealth.status || 'unknown'
     const healthBadge = healthStatus === 'healthy' ? 'badge-green' : healthStatus === 'busy' ? 'badge-amber' : 'badge-red'
 
+    const quickActions = [
+        { label: '查看记忆页', target: 'memory' },
+        { label: '打开设定词典', target: 'entities' },
+        { label: '查看图谱', target: 'graph' },
+    ]
+
     return (
         <>
             <div className="page-header">
@@ -157,43 +163,33 @@ function DashboardPage({ data }) {
                 <span className="card-badge badge-blue">{info.genre || '未知题材'}</span>
             </div>
 
-            <div className="dashboard-grid">
-                <div className="card stat-card">
-                    <span className="stat-label">总字数</span>
-                    <span className="stat-value">{formatNumber(totalWords)}</span>
-                    <span className="stat-sub">目标 {formatNumber(targetWords)} 字 · {pct}%</span>
-                    <div className="progress-track">
-                        <div className="progress-fill" style={{ width: `${pct}%` }} />
+            <div className="card cockpit-hero">
+                <div className="cockpit-hero-top">
+                    <div>
+                        <div className="cockpit-kicker">当前写作任务</div>
+                        <div className="cockpit-title">第 {progress.current_chapter || data.chapter || 0} 章 · {info.title || '未命名项目'}</div>
+                        <div className="cockpit-subtitle">
+                            {protagonist.name || '未设定主角'} · {protagonist.power?.realm || '未知境界'}
+                            {protagonist.location?.current ? ` · ${protagonist.location.current}` : ''}
+                        </div>
                     </div>
+                    <div className={`card-badge ${healthBadge}`}>{healthStatus}</div>
                 </div>
-
-                <div className="card stat-card">
-                    <span className="stat-label">当前章节</span>
-                    <span className="stat-value">第 {progress.current_chapter || 0} 章</span>
-                    <span className="stat-sub">目标 {info.target_chapters || '?'} 章 · 卷 {progress.current_volume || 1}</span>
+                <div className="cockpit-hero-meta">
+                    <span>总字数 {formatNumber(totalWords)} / {formatNumber(targetWords)}</span>
+                    <span>卷 {progress.current_volume || 1} · 目标 {info.target_chapters || '?'}</span>
+                    <span>召回信号 {unresolvedForeshadow.length}</span>
+                    <span>Gap {memoryHealth.consolidation_gap || 0}</span>
                 </div>
-
-                <div className="card stat-card">
-                    <span className="stat-label">主角状态</span>
-                    <span className="stat-value plain">{protagonist.name || '未设定'}</span>
-                    <span className="stat-sub">
-                        {protagonist.power?.realm || '未知境界'}
-                        {protagonist.location?.current ? ` · ${protagonist.location.current}` : ''}
-                    </span>
+                <div className="progress-track cockpit-progress">
+                    <div className="progress-fill" style={{ width: `${pct}%` }} />
                 </div>
-
-                <div className="card stat-card">
-                    <span className="stat-label">高优先级召回</span>
-                    <span className="stat-value" style={{ color: unresolvedForeshadow.length > 10 ? 'var(--accent-red)' : 'var(--accent-amber)' }}>
-                        {unresolvedForeshadow.length}
-                    </span>
-                    <span className="stat-sub">总计 {unresolvedForeshadow.length} 条活跃信号</span>
-                </div>
-
-                <div className="card stat-card">
-                    <span className="stat-label">记忆健康</span>
-                    <span className="stat-value plain">{memoryHealth.memory_stale ? '需关注' : '正常'}</span>
-                    <span className="stat-sub">状态 {healthStatus} · Gap {memoryHealth.consolidation_gap || 0}</span>
+                <div className="cockpit-actions">
+                    {quickActions.map(action => (
+                        <button key={action.target} className="quick-action-btn" onClick={() => onNavigate?.(action.target)}>
+                            {action.label}
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -201,11 +197,19 @@ function DashboardPage({ data }) {
                 <div className="split-main">
                     <div className="card dashboard-section-card">
                         <div className="card-header">
-                            <span className="card-title">本章大纲</span>
+                            <span className="card-title">本章焦点</span>
                             <span className="card-badge badge-purple">Ch.{progress.current_chapter || data.chapter || 0}</span>
                         </div>
                         <div className="entity-detail">
                             <p className="entity-desc">{chapterOutline || '暂无本章大纲'}</p>
+                            {Array.isArray(writingGuidance.guidance_items) && writingGuidance.guidance_items.length > 0 ? (
+                                <div className="entity-current-block">
+                                    <strong>写作建议：</strong>
+                                    <ul className="summary-list compact">
+                                        {writingGuidance.guidance_items.slice(0, 3).map((item, index) => <li key={index}>{item}</li>)}
+                                    </ul>
+                                </div>
+                            ) : null}
                             {recentSummaries.length > 0 ? (
                                 <div className="entity-current-block">
                                     <strong>最近摘要：</strong>
@@ -222,84 +226,56 @@ function DashboardPage({ data }) {
                     </div>
 
                     <div className="card dashboard-section-card">
-                        <div className="card-header">
-                            <span className="card-title">高优先级召回</span>
-                            <span className="card-badge badge-amber">{storyRecall.recall_policy?.mode || 'normal'}</span>
-                        </div>
-                        {unresolvedForeshadow.length > 0 ? (
-                            <div className="table-wrap">
-                                <table className="data-table">
-                                    <thead><tr><th>内容</th><th>状态</th><th>埋设章</th></tr></thead>
-                                    <tbody>
-                                        {unresolvedForeshadow.slice(0, 5).map((item, index) => (
-                                            <tr key={index}>
-                                                <td className="truncate" style={{ maxWidth: 380 }}>{item.content || item.description || item.event || '—'}</td>
-                                                <td><span className="card-badge badge-amber">{item.status || '未知'}</span></td>
-                                                <td>{item.chapter || item.planted_chapter || item.target_chapter || '—'}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        ) : <div className="empty-state compact"><p>当前没有需要优先召回的伏笔</p></div>}
-
-                        {recentEvents.length > 0 ? (
-                            <div className="entity-current-block">
-                                <strong>最近事件：</strong>
-                                <ul className="summary-list">
-                                    {recentEvents.slice(0, 3).map((item, index) => (
-                                        <li key={index}>Ch.{item.ch || item.chapter || '?'}: {item.event || item.content || '—'}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        ) : null}
-
-                        {characterFocus.length > 0 ? (
-                            <div className="entity-current-block">
-                                <strong>关键人物：</strong>
-                                <ul className="summary-list">
-                                    {characterFocus.slice(0, 3).map((item, index) => (
-                                        <li key={index}>{item.name || '未命名角色'}: {item.current_state || '—'}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        ) : null}
-
-                        {changeFocus.length > 0 ? (
-                            <div className="entity-current-block">
-                                <strong>结构化变化：</strong>
-                                <ul className="summary-list">
-                                    {changeFocus.slice(0, 3).map((item, index) => (
-                                        <li key={index}>{item.entity_id || '—'}.{item.field || '—'}: {item.old_value || '—'} → {item.new_value || '—'}</li>
-                                    ))}
-                                </ul>
-                            </div>
-                        ) : null}
-                    </div>
-
-                    <div className="card dashboard-section-card">
-                        <div className="card-header">
-                            <span className="card-title">写作建议</span>
-                            <span className="card-badge badge-cyan">{writingGuidance.checklist_score?.score ?? '—'}</span>
-                        </div>
                         <div className="entity-detail">
-                            {Array.isArray(writingGuidance.guidance_items) && writingGuidance.guidance_items.length > 0 ? (
-                                <ul className="summary-list">
-                                    {writingGuidance.guidance_items.map((item, index) => <li key={index}>{item}</li>)}
+                            <div className="card-header-inline">
+                                <strong>高优先级召回</strong>
+                                <span className="card-badge badge-amber">{storyRecall.recall_policy?.mode || 'normal'}</span>
+                            </div>
+                            {unresolvedForeshadow.length > 0 ? (
+                                <ul className="summary-list compact">
+                                    {unresolvedForeshadow.slice(0, 3).map((item, index) => (
+                                        <li key={index}>{item.content || item.description || item.event || '—'} · {item.status || '未知'}</li>
+                                    ))}
                                 </ul>
-                            ) : <p>暂无写作建议</p>}
+                            ) : <p>当前没有需要优先召回的伏笔</p>}
 
-                            {Array.isArray(writingGuidance.checklist) && writingGuidance.checklist.length > 0 ? (
-                                <div className="entity-current-block">
-                                    <strong>检查清单：</strong>
-                                    <ul className="summary-list">
-                                        {writingGuidance.checklist.slice(0, 5).map((item, index) => (
-                                            <li key={index}>
-                                                {item.required ? '【必做】' : '【可选】'} {item.label || item.id || '未命名项'}
-                                            </li>
+                            {recentEvents.length > 0 ? (
+                                <>
+                                    <div className="card-header-inline">
+                                        <strong>最近事件</strong>
+                                    </div>
+                                    <ul className="summary-list compact">
+                                        {recentEvents.slice(0, 3).map((item, index) => (
+                                            <li key={index}>Ch.{item.ch || item.chapter || '?'}: {item.event || item.content || '—'}</li>
                                         ))}
                                     </ul>
-                                </div>
+                                </>
+                            ) : null}
+
+                            {characterFocus.length > 0 ? (
+                                <>
+                                    <div className="card-header-inline">
+                                        <strong>关键人物</strong>
+                                    </div>
+                                    <ul className="summary-list compact">
+                                        {characterFocus.slice(0, 3).map((item, index) => (
+                                            <li key={index}>{item.name || '未命名角色'}: {item.current_state || '—'}</li>
+                                        ))}
+                                    </ul>
+                                </>
+                            ) : null}
+
+                            {changeFocus.length > 0 ? (
+                                <>
+                                    <div className="card-header-inline">
+                                        <strong>结构化变化</strong>
+                                    </div>
+                                    <ul className="summary-list compact">
+                                        {changeFocus.slice(0, 3).map((item, index) => (
+                                            <li key={index}>{item.entity_id || '—'}.{item.field || '—'}: {item.old_value || '—'} → {item.new_value || '—'}</li>
+                                        ))}
+                                    </ul>
+                                </>
                             ) : null}
                         </div>
                     </div>
@@ -320,20 +296,6 @@ function DashboardPage({ data }) {
                             <p><strong>归档召回：</strong>{memoryHealth.archive_available ? '可用' : '未命中'}</p>
                             {memoryHealth.memory_stale ? <p className="debt-positive">记忆层偏旧，建议优先整理。</p> : null}
                         </div>
-                    </div>
-
-                    <div className="card dashboard-section-card">
-                        <div className="card-header">
-                            <span className="card-title">最近事件摘要</span>
-                            <span className="card-badge badge-blue">{recentSummaries.length} 条</span>
-                        </div>
-                        {recentSummaries.length > 0 ? (
-                            <ul className="summary-list compact">
-                                {recentSummaries.slice(0, 5).map((item, index) => (
-                                    <li key={index}>Ch.{item.chapter || '?'} · {String(item.summary || '').slice(0, 80)}</li>
-                                ))}
-                            </ul>
-                        ) : <div className="empty-state compact"><p>暂无摘要数据</p></div>}
                     </div>
 
                     <div className="card dashboard-section-card">

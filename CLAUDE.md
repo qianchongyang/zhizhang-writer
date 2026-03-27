@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 架构概览
 
 ```
-Claude Code → Skills (7个) → Agents (8个) → Data Layer (state.json / index.db / vectors.db)
+Claude Code → Skills (7个) → Agents (8个) → Data Layer (state.json / index.db / vectors.db / story_memory.json)
 ```
 
 ### 双 Agent 架构
@@ -58,6 +58,15 @@ WORKSPACE_ROOT/
 ```
 
 **注意**：插件本身不在项目目录内，而在 `CLAUDE_PLUGIN_ROOT`（插件缓存目录），运行时统一用该变量引用。
+
+### 数据存储
+
+| 文件 | 用途 |
+|------|------|
+| `state.json` | 当前运行时状态（主角/关系/势力/时间线/伏笔） |
+| `index.db` | SQLite 实体索引（角色/地点/物品/关系网络） |
+| `vectors.db` | 向量语义检索（scene chunk 混合检索） |
+| `story_memory.json` | 跨章节稳定记忆层（character_milestones / plot_threads / recent_events / structured_change_ledger / chapter_snapshots / archive） |
 
 ## 核心命令
 

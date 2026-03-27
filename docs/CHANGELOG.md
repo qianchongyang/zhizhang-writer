@@ -25,6 +25,43 @@
 
 ---
 
+## v5.11.0 (2026-03-27)
+
+**memory_tier 差异化召回**
+
+### 核心升级
+- `structured_change_ledger` 按 memory_tier 分层召回
+- 三层优先顺序：consolidated(≥80分) → episodic(≥60分) → working(<60分)
+- 每层召回限制：consolidated(2条) / episodic(2条) / working(1条)
+- 优先召回高价值、结构化变化，减少 LLM 推断负担
+
+### 召回策略
+- `memory_tier_rank()` 函数提供 tier 排序权重
+- 按 memory_score 和 delta 二次排序，确保重要变化优先召回
+
+---
+
+## v5.10.0 (2026-03-27)
+
+**Context Agent 写前召回接入**
+
+### 核心升级
+- `_build_story_recall()` 方法：构建写前优先召回层
+- 新增 recall_policy：off / normal / boost 三种模式
+- 触发 boost 模式条件：未回收伏笔≥3 或 consolidation_gap≥3
+
+### 召回内容
+- `priority_foreshadowing`：未回收伏笔（按 tier/urgency 排序）
+- `character_focus`：主角+4个高频角色当前状态
+- `structured_change_focus`：结构化变化（按 tier/score 排序）
+- `recent_events`：近5章事件
+
+### 验证
+- `test_context_manager.py`：召回策略测试
+- `test_state_validator.py`：memory_score 计算测试
+
+---
+
 ## v5.9.0 (2026-03-27)
 
 **通用记忆引擎升级**

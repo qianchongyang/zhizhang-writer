@@ -4,6 +4,29 @@
 
 ---
 
+## v5.7.0 (2026-03-27)
+
+**字数检查系统 + 质量总分 + references 扩展**
+
+### Phase 1: 字数检查系统
+- `references/word-count-rules.md`: 新增字数检查规则
+- `webnovel-write/SKILL.md`: Step 1 输出字数建议
+- `webnovel-review/SKILL.md`: 审查时强制字数检查
+
+### Phase 2: 质量报告总分层
+- `references/checker-output-schema.md`: 增加总分汇总
+- `webnovel-review/SKILL.md`: 80分制总分显示
+
+### Phase 3: references 参考资料扩展
+- `references/chapter-guide.md`: 章节写作指南（10种开头技巧）
+- `references/hook-techniques.md`: 悬念设置技巧（10种钩子 + 5级强度）
+- `references/quality-checklist.md`: 80分质量检查清单
+- `references/plot-structures.md`: 情节结构模板
+- `references/dialogue-writing.md`: 对话写作规范
+- `references/shared/core-constraints.md`: 引入四大核心法则
+
+---
+
 ## v5.6.2 (2026-03-26)
 
 **写作约束与审核增强**

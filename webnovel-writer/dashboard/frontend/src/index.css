@@ -268,6 +268,30 @@ body {
   gap: 8px;
 }
 
+.memory-section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.memory-section-btn {
+  border: 2px solid var(--border-main);
+  background: #fff;
+  color: var(--text-main);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 10px;
+  cursor: pointer;
+  box-shadow: var(--shadow-soft);
+}
+
+.memory-section-btn:hover {
+  background: #f4fbff;
+  border-color: var(--accent-blue);
+}
+
 .cockpit-hero {
   margin-bottom: 16px;
   background: linear-gradient(180deg, #fffdf5 0%, #fff6dd 100%);
@@ -373,6 +397,14 @@ body {
   border: 2px solid var(--border-main);
   background: #fffdf5;
   box-shadow: var(--shadow-soft);
+}
+
+.memory-details,
+#recall-priority,
+#recall-archive,
+#recall-health,
+#recall-guidance {
+  scroll-margin-top: 18px;
 }
 
 .memory-details summary {

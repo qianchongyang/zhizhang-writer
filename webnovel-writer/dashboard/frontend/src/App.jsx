@@ -340,6 +340,15 @@ function MemoryRecallPage({ data, onNavigate }) {
     const writingGuidance = data.writing_guidance || {}
     const archiveRecall = storyRecall.archive_recall || {}
     const recallPolicy = storyRecall.recall_policy || {}
+    const memorySections = [
+        { id: 'recall-priority', label: '高优先级召回' },
+        { id: 'recall-archive', label: '归档召回' },
+        { id: 'recall-health', label: '记忆健康' },
+        { id: 'recall-guidance', label: '写作建议' },
+    ]
+    const jumpTo = (sectionId) => {
+        document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
 
     return (
         <>
@@ -355,6 +364,18 @@ function MemoryRecallPage({ data, onNavigate }) {
                     <button className="quick-action-btn" onClick={() => onNavigate?.('dashboard')}>回到驾驶舱</button>
                     <button className="quick-action-btn" onClick={() => onNavigate?.('data')}>看全量数据</button>
                 </div>
+            </div>
+
+            <div className="memory-section-nav">
+                {memorySections.map(section => (
+                    <button
+                        key={section.id}
+                        className="memory-section-btn"
+                        onClick={() => jumpTo(section.id)}
+                    >
+                        {section.label}
+                    </button>
+                ))}
             </div>
 
             <div className="card dashboard-section-card memory-summary-card">
@@ -384,7 +405,7 @@ function MemoryRecallPage({ data, onNavigate }) {
 
             <div className="split-layout">
                 <div className="split-main">
-                    <div className="card dashboard-section-card">
+                    <div className="card dashboard-section-card" id="recall-priority">
                         <div className="card-header">
                             <span className="card-title">高优先级召回</span>
                             <span className="card-badge badge-amber">{storyRecall.priority_foreshadowing?.length || 0} 条</span>
@@ -405,7 +426,7 @@ function MemoryRecallPage({ data, onNavigate }) {
                         </div>
                     </div>
 
-                    <div className="card dashboard-section-card">
+                    <div className="card dashboard-section-card" id="recall-archive">
                         <div className="card-header">
                             <span className="card-title">归档召回</span>
                             <span className="card-badge badge-purple">{archiveRecall.plot_threads?.length || 0} / {archiveRecall.recent_events?.length || 0}</span>
@@ -446,7 +467,7 @@ function MemoryRecallPage({ data, onNavigate }) {
                 </div>
 
                 <div className="split-side">
-                    <div className="card dashboard-section-card">
+                    <div className="card dashboard-section-card" id="recall-health">
                         <div className="card-header">
                             <span className="card-title">记忆健康</span>
                             <span className={`card-badge ${memoryHealth.memory_stale ? 'badge-red' : 'badge-green'}`}>{memoryHealth.status || 'unknown'}</span>
@@ -461,7 +482,7 @@ function MemoryRecallPage({ data, onNavigate }) {
                         </div>
                     </div>
 
-                    <div className="card dashboard-section-card">
+                    <div className="card dashboard-section-card" id="recall-guidance">
                         <div className="card-header">
                             <span className="card-title">写作建议</span>
                             <span className="card-badge badge-cyan">{writingGuidance.checklist?.length || 0} 项</span>

@@ -168,6 +168,10 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" wor
 
 输出：
 - 单一"创作执行包"（任务书 + Context Contract + 直写提示词），供 Step 2A 直接消费，不再拆分独立 Step 1.5。
+- 字数建议输出（来自 word-count-rules.md）：
+  - 本章建议字数范围
+  - 题材字数偏好
+  - 章节类型对应的字数期望
 
 ### Step 1.5：主Agent精简上下文加载（改造后）
 
@@ -281,7 +285,10 @@ review_metrics 字段约束（当前工作流约定只传以下字段）：
   "severity_counts": {"critical": 0, "high": 1, "medium": 2, "low": 0},
   "critical_issues": ["问题描述"],
   "report_file": "审查报告/第100-100章审查报告.md",
-  "notes": "单个字符串；selected_checkers / timeline_gate / anti_ai_force_check 等扩展信息压成单行文本写入此字段"
+  "notes": "单个字符串；selected_checkers / timeline_gate / anti_ai_force_check 等扩展信息压成单行文本写入此字段",
+  "word_count": 2156,
+  "word_count_status": "excellent",
+  "word_count_issue": null
 }
 ```
 - `notes` 在当前执行契约中必须是单个字符串，不得传入对象或数组。

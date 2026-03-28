@@ -410,6 +410,9 @@ def main() -> None:
     p_feedback = sub.add_parser("feedback", help="转发到 reader_feedback.py（读者反馈）")
     p_feedback.add_argument("args", nargs=argparse.REMAINDER)
 
+    # v5.24 交互式菜单
+    p_menu = sub.add_parser("menu", help="启动交互式菜单（所有功能入口）")
+
     # 兼容：允许 `--project-root` 出现在任意位置（减少 agents/skills 拼命令的出错率）
     from .cli_args import normalize_global_project_root
 
@@ -488,6 +491,10 @@ def main() -> None:
     # v5.24 读者反馈
     if tool == "feedback":
         raise SystemExit(_run_script("reader_feedback.py", [*forward_args, *rest]))
+
+    # v5.24 交互式菜单
+    if tool == "menu":
+        raise SystemExit(_run_script("menu_interactive.py", [*forward_args]))
 
 
     raise SystemExit(2)

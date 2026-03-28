@@ -9,8 +9,9 @@
 
 ## 审查路由模式
 
-- 标准/`--fast`：`auto` 路由（核心 3 个 + 条件命中）。
-- `--minimal`：固定核心 3 个（不启用条件审查器）。
+- 标准/`--fast`：核心 3 个 + 条件审查器（auto 路由）。
+- `--turbo`（v5.22）：核心 3 个并行执行，条件审查器跳过。
+- `--minimal`：核心 3 个串行执行，条件审查器跳过。
 
 核心审查器（始终执行）：
 - `consistency-checker`
@@ -54,14 +55,28 @@
 ```text
 selected = ["consistency-checker", "continuity-checker", "ooc-checker"]
 
-if mode != "minimal":
+if mode == "turbo":
+  # turbo 模式：只跑核心 3 个，并行执行，跳过条件审查器
+  parallel Task(agent, {chapter, chapter_file, project_root}) for agent in selected
+elif mode != "minimal":
   if trigger_reader_pull: selected.append("reader-pull-checker")
   if trigger_high_point: selected.append("high-point-checker")
   if trigger_pacing: selected.append("pacing-checker")
   if trigger_logic_bug: selected.append("logic-bug-checker")
-
-parallel Task(agent, {chapter, chapter_file, project_root}) for agent in selected
+  parallel Task(agent, {chapter, chapter_file, project_root}) for agent in selected
+else:
+  # minimal 模式：串行执行核心 3 个
+  for agent in selected:
+    Task(agent, {chapter, chapter_file, project_root})
 ```
+
+### 模式说明
+
+| 模式 | 审查器 | 执行方式 | 条件审查器 |
+|------|--------|---------|-----------|
+| 标准/fast | 核心 3 个 | 并行 | auto 路由 |
+| turbo（v5.22） | 核心 3 个 | 并行 | 跳过 |
+| minimal | 核心 3 个 | 串行 | 跳过 |
 
 ## 输出契约（统一）
 

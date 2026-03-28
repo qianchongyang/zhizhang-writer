@@ -26,6 +26,10 @@ allowed-tools: Read Write Edit Grep Bash Task
 - `/webnovel-write`：Step 1 → 2A → 2B → 3 → 4 → 5 → 6
 - `/webnovel-write --fast`：Step 1 → 2A → 3 → 4 → 5 → 6（跳过 2B）
 - `/webnovel-write --minimal`：Step 1 → 2A → 3（仅3个基础审查）→ 4 → 5 → 6
+- `/webnovel-write --turbo`（v5.22）：Step 1 → 2A → 3（并行）→ 5 → 6（跳过 2B/4，热缓存复用）
+
+> `--turbo` 模式适用于日常日更，追求速度优先。
+> 质量底线：只跳过可选步骤，核心审查和必要润色仍执行。
 
 最小产物（所有模式）：
 - `正文/第{NNNN}章-{title_safe}.md` 或 `正文/第{NNNN}章.md`
@@ -267,7 +271,8 @@ cat "${SKILL_ROOT}/references/step-3-review-gate.md"
 > **分组说明**：以上审查器为组2，按 `auto` 路由执行，结果写入 `.webnovel/tmp/agent_outputs/rev2_ch{NNNN}.json`
 
 模式说明：
-- 标准/`--fast`：核心 3 个 + auto 命中的条件审查器
+- 标准/`--fast`/`--turbo`：核心 3 个 + auto 命中的条件审查器
+- `--turbo`：核心 3 个并行执行（忽略条件审查器，跳过 Step 4 润色）
 - `--minimal`：只跑核心 3 个（忽略条件审查器）
 
 审查指标落库（必做）：

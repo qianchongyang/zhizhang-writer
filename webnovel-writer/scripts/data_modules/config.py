@@ -313,6 +313,14 @@ class DataModulesConfig:
     anti_ai_rewrite_trigger_pass: int = 3          # 通过线命中N项触发重写
     anti_ai_rewrite_trigger_high_risk: int = 10     # 高风险词汇命中N项触发重写
 
+    # ================= v5.22 Turbo 模式 =================
+    turbo_enabled: bool = True                       # 是否启用 turbo 模式
+    turbo_parallel_review: bool = True              # 审查并行化
+    turbo_skip_polish: bool = True                  # turbo 模式跳过润色
+    turbo_context_cache_enabled: bool = True        # 上下文热缓存
+    turbo_context_cache_chapters: int = 3           # 缓存近 N 章上下文
+    turbo_review_timeout: int = 120                # turbo 审查超时（秒）
+
     # ================= Style Fatigue =================
     style_fatigue_warn_threshold: int = 3
     style_fatigue_notice_threshold: int = 1

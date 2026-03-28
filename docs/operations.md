@@ -260,26 +260,26 @@ cat "${PROJECT_ROOT}/.webnovel/context_hot_cache/cache_manifest.json"
 
 ```bash
 # 检查单章
-python -X utf8 "${SCRIPTS_DIR}/health_checker.py" --project-root "${PROJECT_ROOT}" --chapter 50
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" health --chapter 50
 
 # 检查章节范围
-python -X utf8 "${SCRIPTS_DIR}/health_checker.py" --project-root "${PROJECT_ROOT}" --range 1-100
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" health --range 1-100
 
 # 自动检查（每10章）
-python -X utf8 "${SCRIPTS_DIR}/health_checker.py" --project-root "${PROJECT_ROOT}" --auto
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" health --auto
 ```
 
 ### 一致性修复
 
 ```bash
 # 预览修复
-python -X utf8 "${SCRIPTS_DIR}/consistency_repair.py" --project-root "${PROJECT_ROOT}" --dry-run
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" repair --dry-run
 
 # 执行修复
-python -X utf8 "${SCRIPTS_DIR}/consistency_repair.py" --project-root "${PROJECT_ROOT}" --fix
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" repair --fix
 
 # 输出 JSON
-python -X utf8 "${SCRIPTS_DIR}/consistency_repair.py" --project-root "${PROJECT_ROOT}" --json
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" repair --json
 ```
 
 ### Git 快照回滚
@@ -302,36 +302,36 @@ git tag -a ch0051 -m "第51章完成"
 ### 添加读者反馈
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
-  --add --chapter 50 --type "钩子太弱" --content "第三章结尾的钩子不够吸引人"
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  feedback --add --chapter 50 --type "钩子太弱" --content "第三章结尾的钩子不够吸引人"
 ```
 
 ### 查看反馈列表
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
-  --list --chapter 50
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  feedback --list --chapter 50
 ```
 
 ### 统计反馈
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
-  --stats
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  feedback --stats
 ```
 
 ### 生成可操作建议
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
-  --suggestions
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  feedback --suggestions
 ```
 
 ### 查看连载模板
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
-  --templates
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  feedback --templates
 ```
 
 ---

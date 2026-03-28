@@ -398,6 +398,18 @@ def main() -> None:
     p_extract_context.add_argument("--chapter", type=int, required=True, help="目标章节号")
     p_extract_context.add_argument("--format", choices=["text", "json"], default="text", help="输出格式")
 
+    # v5.23 健康检查
+    p_health = sub.add_parser("health", help="转发到 health_checker.py（健康检查）")
+    p_health.add_argument("args", nargs=argparse.REMAINDER)
+
+    # v5.23 一致性修复
+    p_repair = sub.add_parser("repair", help="转发到 consistency_repair.py（一致性修复）")
+    p_repair.add_argument("args", nargs=argparse.REMAINDER)
+
+    # v5.24 读者反馈
+    p_feedback = sub.add_parser("feedback", help="转发到 reader_feedback.py（读者反馈）")
+    p_feedback.add_argument("args", nargs=argparse.REMAINDER)
+
     # 兼容：允许 `--project-root` 出现在任意位置（减少 agents/skills 拼命令的出错率）
     from .cli_args import normalize_global_project_root
 
@@ -464,6 +476,18 @@ def main() -> None:
         if len(rest) > 0 and rest[0] == "merge":
             raise SystemExit(cmd_review_merge(args))
         raise SystemExit(2)
+
+    # v5.23 健康检查
+    if tool == "health":
+        raise SystemExit(_run_script("health_checker.py", [*forward_args, *rest]))
+
+    # v5.23 一致性修复
+    if tool == "repair":
+        raise SystemExit(_run_script("consistency_repair.py", [*forward_args, *rest]))
+
+    # v5.24 读者反馈
+    if tool == "feedback":
+        raise SystemExit(_run_script("reader_feedback.py", [*forward_args, *rest]))
 
 
     raise SystemExit(2)

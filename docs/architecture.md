@@ -199,3 +199,46 @@ AI味惩罚分封顶 = 30分
 - 缓存近 3 章的上下文
 - TTL：1 小时
 - 适用场景：日更、前情提要、快速构建
+
+## v5.23 稳定性版（连载健康检查）
+
+**目标**：保障 50~100 章连续生产时状态一致与故障可恢复。
+
+### 核心功能
+
+| 功能 | 说明 |
+|------|------|
+| 健康检查器 | 每 10 章自动体检，检查 state/index/memory 一致性 |
+| 快照与回滚 | 基于 backup_manager.py 的 Git 版本控制 |
+| 一致性修复 | 自动修复 state.json、index.db、story_memory.json 不一致 |
+
+### 健康检查项
+
+| 检查项 | 严重度 | 说明 |
+|--------|--------|------|
+| state.json 存在性 | critical | 文件必须存在 |
+| state.json 格式 | critical | 必须为有效 JSON |
+| index.db 与 state 一致性 | high | 实体数量差异检查 |
+| story_memory 完整性 | medium | 章节快照缺失检查 |
+| 章节文件连续性 | medium | 缺失文件检查 |
+| 伏笔回收过期 | medium | 过期未回收伏笔提醒 |
+
+### 使用方式
+
+```bash
+# 健康检查
+python health_checker.py --chapter 50
+python health_checker.py --range 1-100
+python health_checker.py --auto  # 每10章自动体检
+
+# 一致性修复
+python consistency_repair.py --dry-run  # 预览
+python consistency_repair.py --fix       # 执行修复
+```
+
+### 快照与回滚
+
+- 基于 Git 的备份管理器（backup_manager.py）
+- 每章完成后自动 Git commit
+- 支持 `git checkout` 原子性回滚
+- Tag 格式：`ch{NNNN}`

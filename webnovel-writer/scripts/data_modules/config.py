@@ -321,6 +321,13 @@ class DataModulesConfig:
     turbo_context_cache_chapters: int = 3           # 缓存近 N 章上下文
     turbo_review_timeout: int = 120                # turbo 审查超时（秒）
 
+    # ================= v5.23 稳定性版 =================
+    health_check_interval: int = 10               # 健康检查间隔（章）
+    health_check_auto_enabled: bool = True         # 是否自动健康检查
+    snapshot_enabled: bool = True                 # 是否启用章节快照
+    snapshot_retention_chapters: int = 100         # 快照保留章数
+    consistency_repair_auto: bool = False         # 是否自动修复一致性
+
     # ================= Style Fatigue =================
     style_fatigue_warn_threshold: int = 3
     style_fatigue_notice_threshold: int = 1

@@ -35,7 +35,8 @@
 │  Agents (8个): Context / Data / 多维 Checker               │
 ├─────────────────────────────────────────────────────────────┤
 │  Data Layer: state.json / index.db / vectors.db /          │
-│              story_memory.json                             │
+│              story_memory.json / project_memory.json /     │
+│              story_technique_blueprint.json                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -46,8 +47,16 @@
 - `author_intent`：长期创作目标与硬约束
 - `current_focus`：最近 1-3 章必须拉回的重点
 - `chapter_intent`：本章任务书，是 Context Agent 的标准产物
+- `chapter_technique_plan`：本章技巧编排，约束 Step 2A 的结构化输入
 
 控制面只负责“本章该写什么、不能偏到哪”，不是事实源。
+
+### 技巧策略层
+
+- `story_technique_blueprint.json`：项目级技巧事实源
+- `project_memory.json`：项目内已验证有效/疲劳的技巧记忆
+
+该层负责回答“本书适合用什么技巧、哪些技巧已经过度使用、这一章优先怎么落位”。
 
 ### 真相层
 
@@ -61,6 +70,7 @@
 ### 运行层
 
 - `context_manager / extract_chapter_context`：把控制面、真相层和大纲编译成可写作上下文
+- `technique_blueprint.py`：把题材、记忆、读者信号编译成技巧蓝图与章节技巧编排
 - `workflow_manager`：记录 `workflow_trace`
 - `dashboard`：展示任务书、召回、风险、记忆健康和运行阶段
 
@@ -78,13 +88,25 @@
 
 `story_memory.json` 负责承载跨章节稳定记忆，包括角色阶段摘要、伏笔状态、近章事件、结构化变化账本、情感弧线与归档层；`state.json` 继续承载当前工作态，`index.db` 和 `vectors.db` 继续负责历史索引与语义召回。
 
-## 六维并行审查
+## 分组审查架构
+
+### 核心审查器（始终执行）
 
 | Checker | 检查重点 |
 |---------|---------|
-| High-point Checker | 爽点密度与质量 |
-| Consistency Checker | 设定一致性（战力/地点/时间线） |
-| Pacing Checker | Strand 比例与断档 |
-| OOC Checker | 人物行为是否偏离人设 |
-| Continuity Checker | 场景与叙事连贯性 |
-| Reader-pull Checker | 钩子强度、期待管理、追读力 |
+| consistency-checker | 设定一致性（战力/地点/时间线/外貌） |
+| continuity-checker | 场景与叙事连贯性 |
+| ooc-checker | 人物行为是否偏离人设 |
+
+### 条件审查器（auto 路由命中时执行）
+
+| Checker | 检查重点 |
+|---------|---------|
+| reader-pull-checker | 钩子强度、期待管理、追读力 |
+| high-point-checker | 爽点密度、质量、兑现后余波 |
+| pacing-checker | Strand 比例、断档、信息密度 |
+
+**审查分组执行规则：**
+- 核心审查器 → 结果写入 `rev1_ch{NNNN}.json`
+- 条件审查器 → 结果写入 `rev2_ch{NNNN}.json`
+- 两组结果合并后落库，并汇总 `technique_execution`

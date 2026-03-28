@@ -210,8 +210,12 @@ def build_guidance_items(
     genre_profile: Dict[str, Any],
     low_score_threshold: float,
     hook_diversify_enabled: bool,
+    project_memory: Dict[str, Any] | None = None,
+    story_technique_blueprint: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     guidance: List[str] = []
+    project_memory = project_memory or {}
+    story_technique_blueprint = story_technique_blueprint or {}
 
     low_ranges = reader_signal.get("low_score_ranges") or []
     if low_ranges:
@@ -263,6 +267,21 @@ def build_guidance_items(
     if composite_hints:
         guidance.append(f"复合题材协同：{composite_hints[0]}")
 
+    technique_summary = (project_memory.get("technique_summary") or {}) if isinstance(project_memory, dict) else {}
+    effective = list(technique_summary.get("effective") or [])
+    fatigue = list(technique_summary.get("fatigue") or [])
+    if effective:
+        guidance.append(f"项目内有效技巧优先：{', '.join(str(item) for item in effective[:2])}")
+    if fatigue:
+        guidance.append(f"项目内疲劳技巧回避：{', '.join(str(item) for item in fatigue[:2])}")
+
+    anti_template = list((story_technique_blueprint.get("anti_template_constraints") or []))[:2]
+    if anti_template:
+        guidance.append(f"反模板化约束：{'；'.join(str(item) for item in anti_template)}")
+    exposition_rules = list((story_technique_blueprint.get("exposition_rules") or []))[:2]
+    if exposition_rules:
+        guidance.append(f"设定显露规则：{'；'.join(str(item) for item in exposition_rules)}")
+
     if not guidance:
         guidance.append("本章执行默认高可读策略：冲突前置、信息后置、段末留钩。")
 
@@ -284,8 +303,12 @@ def build_writing_checklist(
     min_items: int,
     max_items: int,
     default_weight: float,
+    project_memory: Dict[str, Any] | None = None,
+    story_technique_blueprint: Dict[str, Any] | None = None,
 ) -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
+    project_memory = project_memory or {}
+    story_technique_blueprint = story_technique_blueprint or {}
 
     def _add_item(
         item_id: str,
@@ -402,6 +425,36 @@ def build_writing_checklist(
             verify_hint="反派不是工具人推进，需有可解释行动逻辑。",
         )
 
+    if story_technique_blueprint:
+        _add_item(
+            "anti_exposition_guard",
+            "技巧编排：设定通过动作/冲突显露，避免说明性对白过载",
+            weight=max(default_weight, 1.1),
+            required=True,
+            source="technique_blueprint.exposition_rules",
+            verify_hint="抽查关键设定段，至少有1处通过动作/结果而非直说呈现。",
+        )
+        _add_item(
+            "aftermath_guard",
+            "技巧编排：高光后补余波、反应或关系/资源变化",
+            weight=default_weight,
+            required=False,
+            source="technique_blueprint.aftermath",
+            verify_hint="至少1个高光段后有余波层。",
+        )
+
+    technique_summary = (project_memory.get("technique_summary") or {}) if isinstance(project_memory, dict) else {}
+    if technique_summary.get("fatigue"):
+        fatigue_text = "、".join(str(item) for item in list(technique_summary.get("fatigue") or [])[:2])
+        _add_item(
+            "fatigue_avoidance",
+            f"避免继续复用疲劳技巧（{fatigue_text}）",
+            weight=default_weight,
+            required=False,
+            source="project_memory.technique_summary",
+            verify_hint="本章至少有一处技巧差异化表达。",
+        )
+
     for idx, text in enumerate(guidance_items, start=1):
         if len(items) >= max_items:
             break
@@ -451,7 +504,7 @@ def build_writing_checklist(
 
 def is_checklist_item_completed(item: Dict[str, Any], reader_signal: Dict[str, Any]) -> bool:
     item_id = str(item.get("id") or "")
-    if item_id in {"fix_low_score_range", "readability_loop"}:
+    if item_id in {"fix_low_score_range", "readability_loop", "anti_exposition_guard"}:
         review_trend = reader_signal.get("review_trend") or {}
         overall = review_trend.get("overall_avg")
         return isinstance(overall, (int, float)) and float(overall) >= 75.0
@@ -460,7 +513,7 @@ def is_checklist_item_completed(item: Dict[str, Any], reader_signal: Dict[str, A
         hook_usage = reader_signal.get("hook_type_usage") or {}
         return len(hook_usage) >= 2
 
-    if item_id == "coolpoint_combo":
+    if item_id in {"coolpoint_combo", "fatigue_avoidance"}:
         pattern_usage = reader_signal.get("pattern_usage") or {}
         return len(pattern_usage) >= 2
 

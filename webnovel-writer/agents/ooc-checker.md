@@ -33,6 +33,7 @@ model: inherit
 - **Speech patterns** (说话风格): e.g., "言简意赅/喜欢嘲讽/礼貌用词"
 - **Core values** (价值观): e.g., "重视承诺/追求力量/保护弱者"
 - **Behavioral tendencies** (行为倾向): e.g., "三思而后行/冲动鲁莽/谨慎多疑"
+- **Behavior model** (行为反应模型): 压力触发、本能反应、胜利反应、羞耻/挫败反应、选择偏好
 
 **角色档案示例**:
 ```
@@ -55,6 +56,11 @@ model: inherit
 ```
 
 ### 第四步: OOC 检测（三级判定）
+
+新增校验重点：
+- 行为是否匹配角色的 `pressure_trigger / stress_response / choice_bias`
+- 高光后的反应是否符合角色惯性，而不是仅为剧情服务
+- 对话风格是否与 `dialogue_style` 一致
 
 #### 一级: 轻微偏离
 **定义**: 角色行为略有不同，但有合理的世界观内解释。

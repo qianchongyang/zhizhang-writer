@@ -27,6 +27,13 @@ GENRE_INPUT_ALIASES: dict[str, str] = {
 
 
 GENRE_PROFILE_KEY_ALIASES: dict[str, str] = {
+    "xuanhuan": "xianxia",
+    "xianxia": "xianxia",
+    "shuangwen": "shuangwen",
+    "romance": "romance",
+    "mystery": "mystery",
+    "rules-mystery": "rules-mystery",
+    "urban-power": "urban-power",
     "修仙": "xianxia",
     "修仙/玄幻": "xianxia",
     "玄幻": "xianxia",
@@ -63,4 +70,3 @@ def to_profile_key(genre: str) -> str:
         return ""
     normalized = normalize_genre_token(value)
     return GENRE_PROFILE_KEY_ALIASES.get(normalized, normalized.lower())
-

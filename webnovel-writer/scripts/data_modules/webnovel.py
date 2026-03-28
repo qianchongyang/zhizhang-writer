@@ -131,6 +131,26 @@ def cmd_review_merge(args: argparse.Namespace) -> int:
     merged_dimensions = {}
     for g in [group1, group2]:
         merged_dimensions.update(g.get("dimension_scores", {}))
+
+    technique_summary = {
+        "signals": {},
+        "applied": [],
+        "failed": [],
+    }
+    for g in [group1, group2]:
+        summary = g.get("technique_execution") or {}
+        if not isinstance(summary, dict):
+            continue
+        for token in summary.get("applied") or []:
+            token_text = str(token).strip()
+            if token_text and token_text not in technique_summary["applied"]:
+                technique_summary["applied"].append(token_text)
+        for token in summary.get("failed") or []:
+            token_text = str(token).strip()
+            if token_text and token_text not in technique_summary["failed"]:
+                technique_summary["failed"].append(token_text)
+        for key, value in (summary.get("signals") or {}).items():
+            technique_summary["signals"][str(key)] = value
     
     # 计算加权overall_score
     total_issues = sum(merged_severity.values())
@@ -154,6 +174,7 @@ def cmd_review_merge(args: argparse.Namespace) -> int:
         "severity_counts": merged_severity,
         "overall_score": round(overall_score, 1),
         "dimension_scores": merged_dimensions,
+        "technique_execution": technique_summary,
         "source": {
             "group1": str(group1_path),
             "group2": str(group2_path)

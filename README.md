@@ -119,7 +119,8 @@ model: sonnet
 
 | 版本 | 说明 |
 |------|------|
-| **v5.18.0 (当前)** | 时序记忆增强：`story_recall.temporal_window`、章节窗口补召回、写作上下文与 dashboard 快扫接入 |
+| **v5.19.0 (当前)** | 技巧自动化主链路升级：新增项目技巧蓝图、章节技巧编排、行为模型、技巧执行回写与相关文档更新 |
+| **v5.18.0** | 时序记忆增强：`story_recall.temporal_window`、章节窗口补召回、写作上下文与 dashboard 快扫接入 |
 | **v5.17.0** | InkOS 启发升级收口：`current_focus` 控制面、章节任务书、情感弧线、轻量去 AI 味、Observer/Reflector 渐进分离、workflow trace 与 dashboard 联动 |
 | **v5.13.3** | Dashboard 记忆页增加页内快跳：高优先级召回、归档、健康、建议可直接定位 |
 | **v5.13.2** | Dashboard 记忆与召回页压缩：首页驾驶舱与记忆页都改成快速扫视图 |

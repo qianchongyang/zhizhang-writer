@@ -29,6 +29,11 @@ import re
 # 安全修复：导入安全工具函数
 from security_utils import sanitize_commit_message, atomic_write_json, is_git_available
 from project_locator import write_current_project_pointer
+from data_modules.technique_blueprint import (
+    ensure_story_technique_blueprint,
+    load_project_memory,
+    save_project_memory,
+)
 
 
 # Windows 编码兼容性修复
@@ -323,6 +328,10 @@ def init_project(
             "resource_distribution": resource_distribution,
             "gf_visibility": gf_visibility,
             "gf_irreversible_cost": gf_irreversible_cost,
+            "protagonist_desire": protagonist_desire,
+            "protagonist_flaw": protagonist_flaw,
+            "protagonist_archetype": protagonist_archetype,
+            "antagonist_level": antagonist_level,
             "target_reader": target_reader,
             "platform": platform,
             "currency_system": currency_system,
@@ -485,6 +494,17 @@ def init_project(
                 f"- 类型：{golden_finger_type or '（待填写）'}",
                 f"- 风格：{golden_finger_style or '（待填写）'}",
                 "- 成长曲线：",
+                "",
+                "## 行为反应模型（技巧自动化）",
+                "- 公开特质：",
+                "- 隐藏特质：",
+                "- 自我认知：",
+                "- 压力触发：",
+                "- 本能反应：",
+                "- 胜利反应：",
+                "- 羞耻/挫败反应：",
+                "- 选择偏好：",
+                "- 对话风格：",
                 "",
             ]
         ).rstrip() + "\n"
@@ -680,6 +700,24 @@ def init_project(
         + "\n",
     )
 
+    project_memory_path = project_path / ".webnovel" / "project_memory.json"
+    project_memory_payload = load_project_memory(project_memory_path)
+    save_project_memory(project_memory_path, project_memory_payload)
+    ensure_story_technique_blueprint(
+        config=type(
+            "TechniqueConfig",
+            (),
+            {
+                "story_technique_blueprint_file": project_path / ".webnovel" / "story_technique_blueprint.json",
+                "state_file": state_path,
+                "project_memory_file": project_memory_path,
+            },
+        )(),
+        state=state,
+        project_memory=project_memory_payload,
+        force=True,
+    )
+
     # Git 初始化（仅当项目目录内尚无 .git 且 Git 可用）
     git_dir = project_path / ".git"
     if not git_dir.exists():
@@ -746,6 +784,7 @@ __pycache__/
     print(f"\nProject initialized at: {project_path}")
     print("Key files:")
     print(" - .webnovel/state.json")
+    print(" - .webnovel/story_technique_blueprint.json")
     print(" - 设定集/世界观.md")
     print(" - 设定集/力量体系.md")
     print(" - 设定集/主角卡.md")

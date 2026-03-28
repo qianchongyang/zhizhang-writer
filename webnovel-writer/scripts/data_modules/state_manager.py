@@ -35,6 +35,7 @@ from .state_validator import (
     infer_change_kind,
     score_change_significance,
 )
+from .technique_blueprint import load_project_memory, save_project_memory, summarize_technique_execution
 
 
 logger = logging.getLogger(__name__)
@@ -1413,11 +1414,17 @@ class StateManager:
         story_memory_warning = self._update_story_memory(chapter, result)
         if story_memory_warning:
             warnings.append(story_memory_warning)
+        project_memory_warning = self._update_project_memory(chapter, result)
+        if project_memory_warning:
+            warnings.append(project_memory_warning)
 
         return warnings
 
     def _story_memory_path(self) -> Path:
         return getattr(self.config, "story_memory_file", self.config.webnovel_dir / "memory" / "story_memory.json")
+
+    def _project_memory_path(self) -> Path:
+        return getattr(self.config, "project_memory_file", self.config.webnovel_dir / "project_memory.json")
 
     def _default_story_memory(self) -> Dict[str, Any]:
         return {
@@ -2053,6 +2060,85 @@ class StateManager:
         if fallback_summary:
             return {"ch": chapter, "event": fallback_summary}
         return None
+
+    def _update_project_memory(self, chapter: int, result: Dict[str, Any]) -> Optional[str]:
+        try:
+            project_memory_path = self._project_memory_path()
+            project_memory = load_project_memory(project_memory_path)
+            project_info = self._state.get("project_info", {}) if isinstance(self._state.get("project_info"), dict) else {}
+            project = self._state.get("project", {}) if isinstance(self._state.get("project"), dict) else {}
+            genre = str(project_info.get("genre") or project.get("genre") or "general")
+            chapter_meta = result.get("chapter_meta") if isinstance(result.get("chapter_meta"), dict) else {}
+            review_summary = result.get("review_summary") if isinstance(result.get("review_summary"), dict) else {}
+
+            execution_entry = summarize_technique_execution(
+                chapter=chapter,
+                genre=genre,
+                chapter_meta=chapter_meta,
+                technique_execution=result.get("technique_execution") if isinstance(result.get("technique_execution"), dict) else {},
+                overall_score=review_summary.get("overall_score"),
+            )
+
+            history = list(project_memory.get("technique_execution_history") or [])
+            history = [item for item in history if int((item or {}).get("chapter") or 0) != chapter]
+            history.append(execution_entry)
+            if len(history) > 30:
+                history = history[-30:]
+            project_memory["technique_execution_history"] = history
+
+            patterns = list(project_memory.get("technique_patterns") or [])
+            for token in execution_entry.get("applied") or []:
+                text = str(token).strip()
+                if not text:
+                    continue
+                record = None
+                for row in patterns:
+                    if isinstance(row, dict) and str(row.get("technique_id") or "") == text:
+                        record = row
+                        break
+                if record is None:
+                    record = {
+                        "technique_id": text,
+                        "type": "hook" if text.startswith("hook:") else "technique",
+                        "description": text,
+                        "genre_scope": genre,
+                        "scene_role": str(execution_entry.get("scene_role") or ""),
+                        "effectiveness": "neutral",
+                        "source_chapter": chapter,
+                        "last_used_chapter": chapter,
+                        "use_count": 0,
+                        "tags": [],
+                        "learned_at": str(execution_entry.get("recorded_at") or ""),
+                    }
+                    patterns.append(record)
+                record["last_used_chapter"] = chapter
+                record["use_count"] = int(record.get("use_count") or 0) + 1
+                score = execution_entry.get("overall_score")
+                if isinstance(score, (int, float)):
+                    if float(score) >= 80:
+                        record["effectiveness"] = "effective"
+                    elif float(score) < 70:
+                        record["effectiveness"] = "fatigue"
+
+            project_memory["technique_patterns"] = patterns[-50:]
+            project_memory["technique_summary"] = {
+                "effective": [
+                    str(row.get("technique_id") or "")
+                    for row in patterns
+                    if isinstance(row, dict) and str(row.get("effectiveness") or "") == "effective"
+                ][-6:],
+                "fatigue": [
+                    str(row.get("technique_id") or "")
+                    for row in patterns
+                    if isinstance(row, dict) and str(row.get("effectiveness") or "") == "fatigue"
+                ][-6:],
+                "last_updated": str(execution_entry.get("recorded_at") or ""),
+            }
+            save_project_memory(project_memory_path, project_memory)
+            return None
+        except Exception as exc:
+            logger.exception("project memory update failed")
+            return f"项目技巧记忆更新失败: {exc}"
 
     # ==================== 导出 ====================
 

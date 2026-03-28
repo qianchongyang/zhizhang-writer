@@ -43,6 +43,11 @@ from .writing_guidance_builder import (
     build_writing_checklist,
     is_checklist_item_completed,
 )
+from .technique_blueprint import (
+    ensure_story_technique_blueprint,
+    load_project_memory,
+    build_chapter_technique_plan,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -56,12 +61,14 @@ class ContextManager:
         "story_skeleton",
         "story_recall",
         "chapter_intent",
+        "chapter_technique_plan",
         "memory",
         "preferences",
         "alerts",
         "reader_signal",
         "genre_profile",
         "writing_guidance",
+        "story_technique_blueprint",
     }
     SECTION_ORDER = [
         "core",
@@ -69,7 +76,9 @@ class ContextManager:
         "global",
         "reader_signal",
         "genre_profile",
+        "story_technique_blueprint",
         "writing_guidance",
+        "chapter_technique_plan",
         "chapter_intent",
         "story_skeleton",
         "story_recall",
@@ -89,7 +98,10 @@ class ContextManager:
         return getattr(self.config, "story_memory_file", self.config.webnovel_dir / "memory" / "story_memory.json")
 
     def _project_memory_path(self) -> Path:
-        return self.config.webnovel_dir / "project_memory.json"
+        return self.config.project_memory_file
+
+    def _story_technique_blueprint_path(self) -> Path:
+        return self.config.story_technique_blueprint_file
 
     def _author_intent_path(self) -> Path:
         return self.config.author_intent_file
@@ -99,6 +111,9 @@ class ContextManager:
 
     def _chapter_intent_path(self, chapter: int) -> Path:
         return self.config.chapter_intent_dir / f"chapter-{int(chapter):04d}.json"
+
+    def _chapter_technique_plan_path(self, chapter: int) -> Path:
+        return self.config.chapter_technique_plan_dir / f"chapter-{int(chapter):04d}.json"
 
     def _file_mtime_ns(self, path: Path) -> int:
         try:
@@ -132,20 +147,30 @@ class ContextManager:
 
     def _load_project_memory_bundle(self) -> Dict[str, Any]:
         path = self._project_memory_path()
-        if not path.exists():
-            return {"content": {}, "meta": {"mtime_ns": 0}}
-
-        try:
-            raw = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            return {"content": {}, "meta": {"mtime_ns": self._file_mtime_ns(path)}}
-
-        if not isinstance(raw, dict):
-            return {"content": {}, "meta": {"mtime_ns": self._file_mtime_ns(path)}}
+        raw = load_project_memory(path)
 
         return {
             "content": raw,
             "meta": {"mtime_ns": self._file_mtime_ns(path)},
+        }
+
+    def _load_story_technique_blueprint_bundle(
+        self,
+        state: Optional[Dict[str, Any]] = None,
+        project_memory: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        path = self._story_technique_blueprint_path()
+        payload = ensure_story_technique_blueprint(
+            config=self.config,
+            state=state or self._load_state(),
+            project_memory=project_memory or load_project_memory(self._project_memory_path()),
+        )
+        return {
+            "content": payload,
+            "meta": {
+                "mtime_ns": self._file_mtime_ns(path),
+                "version": str(payload.get("version") or ""),
+            },
         }
 
     def _load_control_object(self, path: Path) -> Dict[str, Any]:
@@ -161,12 +186,15 @@ class ContextManager:
         self,
         story_memory_bundle: Optional[Dict[str, Any]] = None,
         project_memory_bundle: Optional[Dict[str, Any]] = None,
+        story_technique_blueprint_bundle: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         story_memory_bundle = story_memory_bundle or self._load_story_memory_bundle()
         project_memory_bundle = project_memory_bundle or self._load_project_memory_bundle()
+        story_technique_blueprint_bundle = story_technique_blueprint_bundle or self._load_story_technique_blueprint_bundle()
 
         story_meta = dict((story_memory_bundle or {}).get("meta") or {})
         project_meta = dict((project_memory_bundle or {}).get("meta") or {})
+        technique_meta = dict((story_technique_blueprint_bundle or {}).get("meta") or {})
         return {
             "story_memory_version": story_meta.get("version", ""),
             "story_memory_last_consolidated_chapter": story_meta.get("last_consolidated_chapter", 0),
@@ -174,6 +202,8 @@ class ContextManager:
             "story_memory_mtime_ns": story_meta.get("mtime_ns", 0),
             "state_mtime_ns": self._file_mtime_ns(self.config.state_file),
             "project_memory_mtime_ns": project_meta.get("mtime_ns", 0),
+            "story_technique_blueprint_mtime_ns": technique_meta.get("mtime_ns", 0),
+            "story_technique_blueprint_version": technique_meta.get("version", ""),
         }
 
     def _is_snapshot_compatible(
@@ -204,11 +234,16 @@ class ContextManager:
             cached_story_mtime = int(meta.get("story_memory_mtime_ns") or 0)
             cached_state_mtime = int(meta.get("state_mtime_ns") or 0)
             cached_project_mtime = int(meta.get("project_memory_mtime_ns") or 0)
+            cached_blueprint_mtime = int(meta.get("story_technique_blueprint_mtime_ns") or 0)
+            cached_blueprint_version = str(meta.get("story_technique_blueprint_version") or "")
             current_story_version = str(story_memory_meta.get("version", ""))
             current_story_chapter = int(story_memory_meta.get("last_consolidated_chapter") or 0)
             current_story_mtime = int(story_memory_meta.get("mtime_ns") or 0)
             current_state_mtime = self._file_mtime_ns(self.config.state_file)
             current_project_mtime = self._file_mtime_ns(self._project_memory_path())
+            current_blueprint_bundle = self._load_story_technique_blueprint_bundle()
+            current_blueprint_mtime = int((current_blueprint_bundle.get("meta") or {}).get("mtime_ns") or 0)
+            current_blueprint_version = str((current_blueprint_bundle.get("meta") or {}).get("version") or "")
             if cached_story_version != current_story_version:
                 return False
             if cached_story_chapter != current_story_chapter:
@@ -218,6 +253,10 @@ class ContextManager:
             if cached_state_mtime != current_state_mtime:
                 return False
             if cached_project_mtime != current_project_mtime:
+                return False
+            if cached_blueprint_mtime != current_blueprint_mtime:
+                return False
+            if cached_blueprint_version != current_blueprint_version:
                 return False
 
         return True
@@ -238,9 +277,13 @@ class ContextManager:
 
         story_memory_bundle = self._load_story_memory_bundle()
         project_memory_bundle = self._load_project_memory_bundle()
+        story_technique_blueprint_bundle = self._load_story_technique_blueprint_bundle(
+            project_memory=project_memory_bundle.get("content") or {},
+        )
         story_memory_meta = self._context_dependency_meta(
             story_memory_bundle=story_memory_bundle,
             project_memory_bundle=project_memory_bundle,
+            story_technique_blueprint_bundle=story_technique_blueprint_bundle,
         )
 
         if use_snapshot:
@@ -334,6 +377,11 @@ class ContextManager:
         story_memory_bundle = story_memory_bundle or self._load_story_memory_bundle()
         project_memory_bundle = project_memory_bundle or self._load_project_memory_bundle()
         project_memory = project_memory_bundle.get("content") or self._load_json_optional(self._project_memory_path())
+        story_technique_blueprint_bundle = self._load_story_technique_blueprint_bundle(
+            state=state,
+            project_memory=project_memory,
+        )
+        story_technique_blueprint = dict(story_technique_blueprint_bundle.get("content") or {})
         story_memory_content = dict(story_memory_bundle.get("content") or {})
         story_memory_meta = dict(story_memory_bundle.get("meta") or {})
         chapter_outline = self._load_outline(chapter)
@@ -376,6 +424,8 @@ class ContextManager:
             "project_memory_meta": dict(project_memory_bundle.get("meta") or {}),
             "story_memory": story_memory_content,
             "story_memory_meta": story_memory_meta,
+            "story_technique_blueprint": story_technique_blueprint,
+            "story_technique_blueprint_meta": dict(story_technique_blueprint_bundle.get("meta") or {}),
             "author_intent": author_intent,
             "current_focus": current_focus,
         }
@@ -383,7 +433,13 @@ class ContextManager:
         alert_slice = max(0, int(self.config.context_alerts_slice))
         reader_signal = self._load_reader_signal(chapter)
         genre_profile = self._load_genre_profile(state)
-        writing_guidance = self._build_writing_guidance(chapter, reader_signal, genre_profile)
+        writing_guidance = self._build_writing_guidance(
+            chapter,
+            reader_signal,
+            genre_profile,
+            project_memory=project_memory,
+            story_technique_blueprint=story_technique_blueprint,
+        )
         current_focus = self._resolve_current_focus(
             chapter=chapter,
             chapter_outline=chapter_outline,
@@ -404,6 +460,17 @@ class ContextManager:
             current_focus=current_focus,
             writing_guidance=writing_guidance,
         )
+        chapter_technique_plan = self._build_chapter_technique_plan(
+            chapter=chapter,
+            chapter_outline=chapter_outline,
+            reader_signal=reader_signal,
+            genre_profile=genre_profile,
+            story_recall=story_recall,
+            chapter_intent=chapter_intent,
+            writing_guidance=writing_guidance,
+            story_technique_blueprint=story_technique_blueprint,
+            project_memory=project_memory,
+        )
 
         return {
             "meta": {"chapter": chapter},
@@ -412,7 +479,9 @@ class ContextManager:
             "global": global_ctx,
             "reader_signal": reader_signal,
             "genre_profile": genre_profile,
+            "story_technique_blueprint": story_technique_blueprint,
             "writing_guidance": writing_guidance,
+            "chapter_technique_plan": chapter_technique_plan,
             "chapter_intent": chapter_intent,
             "story_skeleton": story_skeleton,
             "story_recall": story_recall,
@@ -526,6 +595,8 @@ class ContextManager:
         chapter: int,
         reader_signal: Dict[str, Any],
         genre_profile: Dict[str, Any],
+        project_memory: Optional[Dict[str, Any]] = None,
+        story_technique_blueprint: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         if not getattr(self.config, "context_writing_guidance_enabled", True):
             return {}
@@ -543,6 +614,8 @@ class ContextManager:
             hook_diversify_enabled=bool(
                 getattr(self.config, "context_writing_guidance_hook_diversify", True)
             ),
+            project_memory=project_memory or {},
+            story_technique_blueprint=story_technique_blueprint or {},
         )
 
         guidance = list(guidance_bundle.get("guidance") or [])
@@ -563,6 +636,8 @@ class ContextManager:
             reader_signal=reader_signal,
             genre_profile=genre_profile,
             strategy_card=methodology_strategy,
+            project_memory=project_memory or {},
+            story_technique_blueprint=story_technique_blueprint or {},
         )
 
         checklist_score = self._compute_writing_checklist_score(
@@ -592,6 +667,7 @@ class ContextManager:
             "checklist": checklist,
             "checklist_score": checklist_score,
             "methodology": methodology_strategy,
+            "blueprint_profile": str((story_technique_blueprint or {}).get("primary_profile") or ""),
             "signals_used": {
                 "has_low_score_ranges": bool(low_ranges),
                 "hook_types": hook_types,
@@ -600,6 +676,40 @@ class ContextManager:
                 "methodology_enabled": bool(methodology_strategy.get("enabled")),
             },
         }
+
+    def _build_chapter_technique_plan(
+        self,
+        *,
+        chapter: int,
+        chapter_outline: str,
+        reader_signal: Dict[str, Any],
+        genre_profile: Dict[str, Any],
+        story_recall: Dict[str, Any],
+        chapter_intent: Dict[str, Any],
+        writing_guidance: Dict[str, Any],
+        story_technique_blueprint: Dict[str, Any],
+        project_memory: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        plan = build_chapter_technique_plan(
+            chapter=chapter,
+            chapter_outline=chapter_outline,
+            reader_signal=reader_signal,
+            genre_profile=genre_profile,
+            story_recall=story_recall,
+            chapter_intent=chapter_intent,
+            writing_guidance=writing_guidance,
+            story_technique_blueprint=story_technique_blueprint,
+            project_memory=project_memory,
+        )
+        try:
+            self.config.ensure_dirs()
+            self._chapter_technique_plan_path(chapter).write_text(
+                json.dumps(plan, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            logger.warning("failed to persist chapter technique plan for chapter %s", chapter)
+        return plan
 
     def _clean_outline_goal(self, chapter_outline: str) -> str:
         text = re.sub(r"\s+", " ", str(chapter_outline or "")).strip()
@@ -927,6 +1037,8 @@ class ContextManager:
         reader_signal: Dict[str, Any],
         genre_profile: Dict[str, Any],
         strategy_card: Dict[str, Any] | None = None,
+        project_memory: Optional[Dict[str, Any]] = None,
+        story_technique_blueprint: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         _ = chapter
         if not getattr(self.config, "context_writing_checklist_enabled", True):
@@ -946,6 +1058,8 @@ class ContextManager:
             min_items=min_items,
             max_items=max_items,
             default_weight=default_weight,
+            project_memory=project_memory or {},
+            story_technique_blueprint=story_technique_blueprint or {},
         )
 
     def _is_methodology_enabled_for_genre(self, genre_profile: Dict[str, Any]) -> bool:

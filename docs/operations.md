@@ -25,11 +25,34 @@ workspace-root/
 
 ```text
 project-root/
-├── .webnovel/            # 运行时数据（state/index/vectors/summaries）
+├── .webnovel/            # 运行时数据（state/index/vectors/summaries/control）
 ├── 正文/                  # 正文章节
 ├── 大纲/                  # 总纲与卷纲
 └── 设定集/                # 世界观、角色、力量体系
 ```
+
+### `.webnovel/` 关键运行时文件
+
+```text
+.webnovel/
+├── state.json
+├── project_memory.json
+├── story_technique_blueprint.json
+├── control/
+│   ├── chapter_intents/
+│   └── chapter_technique_plans/
+├── memory/
+│   └── story_memory.json
+├── summaries/
+├── snapshots/
+├── index.db
+├── rag.db
+└── vectors.db
+```
+
+- `story_technique_blueprint.json`：项目级技巧蓝图，初始化生成，旧项目可懒生成
+- `project_memory.json`：项目级技巧记忆，记录有效/疲劳技巧与近章执行结果
+- `control/chapter_technique_plans/`：章节技巧编排缓存，供 Step 2A 直接消费
 
 ## 插件目录（Marketplace 安装）
 
@@ -67,29 +90,76 @@ ${CLAUDE_HOME:-~/.claude}/webnovel-writer/workspaces.json
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
-export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
+export PROJECT_ROOT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
+```
+
+### 预检
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" preflight
+```
+
+### 检查技巧运行时文件
+
+```bash
+ls "${PROJECT_ROOT}/.webnovel/story_technique_blueprint.json"
+ls "${PROJECT_ROOT}/.webnovel/project_memory.json"
+ls "${PROJECT_ROOT}/.webnovel/control/chapter_technique_plans"
 ```
 
 ### 索引重建
 
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index process-chapter --chapter 1
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index stats
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index process-chapter --chapter 1
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index stats
 ```
 
 ### 健康报告
 
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" status -- --focus all
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" status -- --focus urgency
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" status -- --focus all
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" status -- --focus urgency
 ```
 
 ### 向量重建
 
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rag index-chapter --chapter 1
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rag stats
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rag index-chapter --chapter 1
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" rag stats
 ```
+
+### 审查指标落库
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index save-review-metrics --data "@${PROJECT_ROOT}/.webnovel/tmp/review_metrics.json"
+```
+
+### 审查结果合并（分组审查）
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  merge \
+  --group1 "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/rev1_ch{NNNN}.json" \
+  --group2 "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/rev2_ch{NNNN}.json" \
+  --output "${PROJECT_ROOT}/.webnovel/tmp/merged/review_merged_ch{NNNN}.json"
+```
+
+合并后的结果现在会额外带出 `technique_execution`，用于：
+
+- 回写 `project_memory.json`
+- 驱动后续章节的技巧疲劳规避
+- 给润色阶段提供“说明腔 / 余波缺失 / 同构重复”信号
+
+### 旧项目升级自检
+
+首次对旧项目执行 `/webnovel-plan` 或 `/webnovel-write` 后，应确认以下文件已自动补齐：
+
+```bash
+test -f "${PROJECT_ROOT}/.webnovel/story_technique_blueprint.json"
+test -f "${PROJECT_ROOT}/.webnovel/project_memory.json"
+```
+
+若未生成，先跑一次预检，再检查 `state.json` 中题材字段是否存在。
 
 ### 测试入口
 

@@ -197,6 +197,15 @@ def test_build_chapter_context_payload_includes_contract_sections(tmp_path):
     assert payload["context_contract_version"] == "v3"
     assert payload.get("context_weight_stage") in {"early", "mid", "late"}
     assert payload["memory"]["project_memory"]["patterns"][0]["description"] == "危机钩"
+    assert payload["story_technique_blueprint"]["primary_profile"] == "xianxia"
+    assert payload["chapter_technique_plan"]["opening_hook"]
+    assert payload["chapter_technique_plan"]["paragraph_rhythm"] == [
+        "trigger",
+        "reaction",
+        "action",
+        "result",
+        "aftermath",
+    ]
     assert payload["story_recall"]["priority_foreshadowing"][0]["name"] == "玄铁令"
     assert payload["story_recall"]["emotional_focus"][0]["emotional_state"] == "压抑"
     assert payload["chapter_intent"]["focus_title"] == "回收旧线索"
@@ -298,6 +307,24 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
                 "signals": {"risk_flags": ["pattern_overuse_watch"]},
             },
         },
+        "chapter_technique_plan": {
+            "scene_role": "confront",
+            "opening_hook": "旧玉佩刚一出现就被人当众认出",
+            "mid_payoffs": ["先证明玉佩线索真实", "让旧债方先暴露敌意"],
+            "climax_patterns": ["身份掉马", "反派翻车"],
+            "ending_hook": "旧玉佩背后的真正主人在章末现身",
+            "paragraph_rhythm": ["trigger", "reaction", "action", "result", "aftermath"],
+            "anti_template_constraints": ["不要用连续三段解释性对白交代设定"],
+        },
+        "story_technique_blueprint": {
+            "primary_profile": "xianxia",
+            "generalized_strategy": False,
+            "genre_strategy": {
+                "hook_pool": ["悬念钩", "危机钩"],
+                "coolpoint_pool": ["身份掉马", "反派翻车"],
+            },
+            "anti_template_constraints": ["禁止连续重复同构打脸"],
+        },
     }
 
     text = _render_text(payload)
@@ -326,6 +353,12 @@ def test_render_text_contains_writing_guidance_section(tmp_path):
     assert "## 长篇方法论策略" in text
     assert "- 适用题材: xianxia" in text
     assert "next_reason=78.0" in text
+    assert "## 章节技巧编排" in text
+    assert "旧玉佩刚一出现就被人当众认出" in text
+    assert "trigger → reaction → action → result → aftermath" in text
+    assert "## 项目技巧蓝图" in text
+    assert "- 主题材画像: xianxia" in text
+    assert "- 爽点池: 身份掉马, 反派翻车" in text
 
 
 def test_render_text_contains_rag_assist_section_when_hits_exist(tmp_path):

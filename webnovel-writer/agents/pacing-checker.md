@@ -9,6 +9,11 @@ model: inherit
 
 > **职责**: 节奏分析师，执行 Strand Weave 平衡检查，防止读者疲劳。
 
+新增关注：
+- 信息密度是否失衡
+- 是否存在“只有解释没有动作/结果”的段落链
+- 是否形成 `trigger → reaction → action → result → aftermath` 的最小闭环
+
 > **输出格式**: 遵循 `${CLAUDE_PLUGIN_ROOT}/references/checker-output-schema.md` 统一 JSON Schema
 
 ## 检查范围

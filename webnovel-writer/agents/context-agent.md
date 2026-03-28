@@ -14,6 +14,7 @@ model: inherit
 
 - **Taxonomy**: `${CLAUDE_PLUGIN_ROOT}/references/reading-power-taxonomy.md`
 - **Genre Profile**: `${CLAUDE_PLUGIN_ROOT}/references/genre-profiles.md`
+- **Technique Blueprint**: `.webnovel/story_technique_blueprint.json`
 - **Context Contract**: `${CLAUDE_PLUGIN_ROOT}/skills/webnovel-write/references/step-1.5-contract.md`
 - **Shared References**: `${CLAUDE_PLUGIN_ROOT}/references/shared/` 为单一事实源；如需枚举/扫描参考文件，遇到 `<!-- DEPRECATED:` 的文件一律跳过。
 
@@ -48,7 +49,16 @@ model: inherit
 - 是否过渡章（必须按大纲判定，禁止按字数判定）
 - 追读力设计（钩子类型/强度、微兑现清单、爽点模式）
 
-3. **Step 2A 直写提示词**
+3. **章节技巧编排（结构化）**
+- 章型：`build_up / confront / release`
+- 开篇钩子
+- 章中微兑现
+- 高潮主/副爽点模式
+- 章末钩子
+- 段落节拍：`trigger → reaction → action → result → aftermath`
+- 反模板约束
+
+4. **Step 2A 直写提示词**
 - 章节节拍（开场触发 → 推进/受阻 → 反转/兑现 → 章末钩子）
 - 不可变事实清单（大纲事实/设定事实/承接事实）
 - 禁止事项（越级能力、无因果跳转、设定冲突、剧情硬拐）
@@ -57,6 +67,7 @@ model: inherit
 要求：
 - 三层信息必须一致；若冲突，以“设定 > 大纲 > 风格偏好”优先。
 - 输出内容必须能直接给 Step 2A 开写，不再依赖额外补问。
+- 若 `story_technique_blueprint` 与 `genre_profile` 冲突，以蓝图中的项目级策略优先；若蓝图缺失，则回退到 `genre_profile`。
 
 ---
 

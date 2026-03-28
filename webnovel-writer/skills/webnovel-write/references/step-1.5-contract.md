@@ -17,6 +17,17 @@
 - 信息密度（low/medium/high）
 - 是否过渡章（true/false，必须按大纲判定，不按字数判定）
 - 追读力设计（钩子类型/强度、微兑现清单、爽点模式）
+- 章节技巧编排（章型、开篇钩子、章中微兑现、高潮模式、章末钩子、段落节拍）
+
+## 章节技巧编排（新增，结构化必读）
+
+- `chapter_technique_plan.scene_role`：`build_up` / `confront` / `release`
+- `chapter_technique_plan.opening_hook`：开篇钩子类型与目标
+- `chapter_technique_plan.mid_payoffs`：章中必须兑现的 1-2 个轻回报
+- `chapter_technique_plan.climax_patterns`：高潮主爽点/副爽点组合
+- `chapter_technique_plan.ending_hook`：章末钩子类型与目标
+- `chapter_technique_plan.paragraph_rhythm`：默认按 `trigger → reaction → action → result → aftermath`
+- `chapter_technique_plan.anti_template_constraints`：本章禁止重复的模板化写法
 
 过渡章判定规则（强制）：
 - 依据章纲/卷纲中的章节功能标签与目标（铺垫/转场/承接/回收等）。
@@ -44,11 +55,12 @@
 
 ## 读取优先级
 
-1. 必读：`writing_guidance.guidance_items`
-2. 条件必读：`rag_assist`（`invoked=true` 且 `hits` 非空）
-3. 选读：`reader_signal`、`genre_profile.reference_hints`
-4. 记忆优先：`story_recall.recall_policy`、`story_recall.priority_foreshadowing`、`story_recall.character_focus`
-5. 控制面优先：`chapter_intent`、`memory.current_focus`、`memory.author_intent`
+1. 必读：`chapter_technique_plan`
+2. 必读：`writing_guidance.guidance_items`
+3. 条件必读：`rag_assist`（`invoked=true` 且 `hits` 非空）
+4. 选读：`reader_signal`、`genre_profile.reference_hints`、`story_technique_blueprint`
+5. 记忆优先：`story_recall.recall_policy`、`story_recall.priority_foreshadowing`、`story_recall.character_focus`
+6. 控制面优先：`chapter_intent`、`memory.current_focus`、`memory.author_intent`
 
 ## 记忆召回策略
 

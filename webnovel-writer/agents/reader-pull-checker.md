@@ -56,6 +56,14 @@ model: inherit
     "next_chapter_reason": "读者想知道云芝找萧炎什么事",
     "debt_balance": 0.0
   },
+  "technique_execution": {
+    "applied": ["hook:渴望钩"],
+    "failed": [],
+    "signals": {
+      "dialogue_exposition_risk": false,
+      "pattern_redundancy_risk": false
+    }
+  },
   "summary": "硬约束通过，钩子强度偏弱，建议增强章末期待。",
   "override_eligible": true
 }
@@ -102,6 +110,8 @@ model: inherit
 | SOFT_PATTERN_REPEAT | 模式重复 | 避免连续3章同型 | ✓ |
 | SOFT_EXPECTATION_OVERLOAD | 期待过载 | 新增期待 ≤ 2 | ✓ |
 | SOFT_RHYTHM_NATURALNESS | 节奏自然性 | 避免固定字距机械打点 | ✓ |
+| SOFT_DIALOGUE_EXPOSITION | 说明腔风险 | 避免设定通过对白硬塞 | ✓ |
+| SOFT_PATTERN_REDUNDANCY | 技巧重复 | 避免连续高频同构钩子/爽点 | ✓ |
 
 **软建议输出**:
 ```json

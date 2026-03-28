@@ -314,8 +314,10 @@ def _load_contract_context(project_root: Path, chapter_num: int) -> Dict[str, An
         "memory": (sections.get("memory") or {}).get("content", {}),
         "story_recall": (sections.get("story_recall") or {}).get("content", {}),
         "chapter_intent": (sections.get("chapter_intent") or {}).get("content", {}),
+        "chapter_technique_plan": (sections.get("chapter_technique_plan") or {}).get("content", {}),
         "reader_signal": (sections.get("reader_signal") or {}).get("content", {}),
         "genre_profile": (sections.get("genre_profile") or {}).get("content", {}),
+        "story_technique_blueprint": (sections.get("story_technique_blueprint") or {}).get("content", {}),
         "writing_guidance": (sections.get("writing_guidance") or {}).get("content", {}),
     }
 
@@ -344,8 +346,10 @@ def build_chapter_context_payload(project_root: Path, chapter_num: int) -> Dict[
         "memory": contract_context.get("memory", {}),
         "story_recall": contract_context.get("story_recall", {}),
         "chapter_intent": contract_context.get("chapter_intent", {}),
+        "chapter_technique_plan": contract_context.get("chapter_technique_plan", {}),
         "reader_signal": contract_context.get("reader_signal", {}),
         "genre_profile": contract_context.get("genre_profile", {}),
+        "story_technique_blueprint": contract_context.get("story_technique_blueprint", {}),
         "writing_guidance": contract_context.get("writing_guidance", {}),
         "story_memory": memory_section.get("story_memory", {}),
         "story_memory_meta": memory_section.get("story_memory_meta", {}),
@@ -611,6 +615,39 @@ def _render_text(payload: Dict[str, Any]) -> str:
             lines.append(f"- 上下文阶段权重: {stage}")
             lines.append("")
 
+    chapter_technique_plan = payload.get("chapter_technique_plan") or {}
+    if chapter_technique_plan:
+        lines.append("## 章节技巧编排")
+        lines.append("")
+        lines.append(f"- 章型: {chapter_technique_plan.get('scene_role')}")
+        opening_hook = chapter_technique_plan.get("opening_hook") or {}
+        if opening_hook:
+            if isinstance(opening_hook, dict):
+                lines.append(f"- 开篇钩子: {opening_hook.get('type')} / {opening_hook.get('goal')}")
+            else:
+                lines.append(f"- 开篇钩子: {opening_hook}")
+        mid_payoffs = chapter_technique_plan.get("mid_payoffs") or []
+        if mid_payoffs:
+            lines.append(f"- 章中微兑现: {', '.join(str(item) for item in mid_payoffs)}")
+        climax_patterns = chapter_technique_plan.get("climax_patterns") or []
+        if climax_patterns:
+            lines.append(f"- 高潮模式: {', '.join(str(item) for item in climax_patterns)}")
+        ending_hook = chapter_technique_plan.get("ending_hook") or {}
+        if ending_hook:
+            if isinstance(ending_hook, dict):
+                lines.append(f"- 章末钩子: {ending_hook.get('type')} / {ending_hook.get('goal')}")
+            else:
+                lines.append(f"- 章末钩子: {ending_hook}")
+        rhythm = chapter_technique_plan.get("paragraph_rhythm") or []
+        if rhythm:
+            lines.append(f"- 段落节拍: {' → '.join(str(item) for item in rhythm)}")
+        anti_template = chapter_technique_plan.get("anti_template_constraints") or []
+        if anti_template:
+            lines.append("- 反模板约束:")
+            for item in anti_template[:3]:
+                lines.append(f"  - {item}")
+        lines.append("")
+
     writing_guidance = payload.get("writing_guidance") or {}
     guidance_items = writing_guidance.get("guidance_items") or []
     checklist = writing_guidance.get("checklist") or []
@@ -712,6 +749,24 @@ def _render_text(payload: Dict[str, Any]) -> str:
         for row in refs[:3]:
             lines.append(f"- {row}")
             lines.append("")
+
+    story_technique_blueprint = payload.get("story_technique_blueprint") or {}
+    if story_technique_blueprint:
+        lines.append("## 项目技巧蓝图")
+        lines.append("")
+        lines.append(f"- 主题材画像: {story_technique_blueprint.get('primary_profile')}")
+        lines.append(f"- 降级策略: {story_technique_blueprint.get('generalized_strategy')}")
+        genre_strategy = story_technique_blueprint.get("genre_strategy") or {}
+        hook_pool = genre_strategy.get("hook_pool") or []
+        if hook_pool:
+            lines.append(f"- 钩子池: {', '.join(str(item) for item in hook_pool[:4])}")
+        coolpoint_pool = genre_strategy.get("coolpoint_pool") or []
+        if coolpoint_pool:
+            lines.append(f"- 爽点池: {', '.join(str(item) for item in coolpoint_pool[:4])}")
+        anti_template = story_technique_blueprint.get("anti_template_constraints") or []
+        if anti_template:
+            lines.append(f"- 反模板化: {'; '.join(str(item) for item in anti_template[:3])}")
+        lines.append("")
 
     previous_meta_style = []
     for item in payload.get("story_recall", {}).get("recent_events", []):

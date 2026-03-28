@@ -443,6 +443,57 @@ def test_context_manager_invalidation_on_project_memory_change(temp_project):
     assert second["sections"]["memory"]["content"]["project_memory"]["patterns"][0]["description"] == "新记忆"
 
 
+def test_context_manager_includes_story_blueprint_and_chapter_plan(temp_project):
+    state = {
+        "project_info": {"genre": "修仙"},
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {"0006": {"hook": "旧伤复发", "coolpoint_patterns": ["身份掉马"]}},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    temp_project.current_focus_file.write_text(
+        json.dumps(
+            {
+                "title": "拉回玄铁令",
+                "goal": "本章必须推进玄铁令真相",
+                "must_resolve": ["确认玄铁令来历"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 5,
+                "characters": {"萧炎": {"current_state": "压抑", "last_update_chapter": 5}},
+                "plot_threads": [{"name": "玄铁令", "status": "pending", "tier": "核心", "urgency": 92}],
+                "recent_events": [{"ch": 5, "event": "旧伤复发"}],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    payload = manager.build_context(6, use_snapshot=False, save_snapshot=False)
+
+    blueprint = payload["sections"]["story_technique_blueprint"]["content"]
+    plan = payload["sections"]["chapter_technique_plan"]["content"]
+    scene = payload["sections"]["scene"]["content"]
+
+    assert blueprint["primary_profile"] == "xianxia"
+    assert blueprint["genre_strategy"]["hook_pool"]
+    assert plan["opening_hook"]
+    assert plan["paragraph_rhythm"] == ["trigger", "reaction", "action", "result", "aftermath"]
+    assert "确认玄铁令来历" in plan["must_resolve"]
+    assert isinstance(scene.get("appearing_characters"), list)
+
+
 def test_context_manager_story_recall_prioritizes_core_threads(temp_project):
     state = {
         "protagonist_state": {"name": "萧炎"},
@@ -990,7 +1041,7 @@ def test_context_manager_enables_methodology_for_non_xianxia_by_default(temp_pro
     guidance = payload["sections"]["writing_guidance"]["content"]
     strategy = guidance.get("methodology") or {}
     assert strategy.get("enabled") is True
-    assert strategy.get("genre_profile_key") == "xuanhuan"
+    assert strategy.get("genre_profile_key") == "xianxia"
     assert guidance.get("signals_used", {}).get("methodology_enabled") is True
 
 

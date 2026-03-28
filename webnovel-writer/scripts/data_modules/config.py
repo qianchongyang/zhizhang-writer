@@ -115,6 +115,14 @@ class DataModulesConfig:
         return self.memory_dir / "story_memory.json"
 
     @property
+    def project_memory_file(self) -> Path:
+        return self.webnovel_dir / "project_memory.json"
+
+    @property
+    def story_technique_blueprint_file(self) -> Path:
+        return self.webnovel_dir / "story_technique_blueprint.json"
+
+    @property
     def control_dir(self) -> Path:
         return self.webnovel_dir / "control"
 
@@ -129,6 +137,10 @@ class DataModulesConfig:
     @property
     def chapter_intent_dir(self) -> Path:
         return self.control_dir / "chapter_intents"
+
+    @property
+    def chapter_technique_plan_dir(self) -> Path:
+        return self.control_dir / "chapter_technique_plans"
 
     # v5.1 引入: alias_index_file 已废弃，别名存储在 index.db aliases 表
 
@@ -360,6 +372,7 @@ class DataModulesConfig:
         self.memory_dir.mkdir(parents=True, exist_ok=True)
         self.control_dir.mkdir(parents=True, exist_ok=True)
         self.chapter_intent_dir.mkdir(parents=True, exist_ok=True)
+        self.chapter_technique_plan_dir.mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def from_project_root(cls, project_root: str | Path) -> "DataModulesConfig":

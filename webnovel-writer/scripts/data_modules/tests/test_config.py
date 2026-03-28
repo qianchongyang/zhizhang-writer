@@ -15,12 +15,15 @@ def test_config_paths_and_defaults(tmp_path):
     assert cfg.project_root == tmp_path
     assert cfg.webnovel_dir.name == ".webnovel"
     assert cfg.state_file.name == "state.json"
+    assert cfg.project_memory_file.name == "project_memory.json"
+    assert cfg.story_technique_blueprint_file.name == "story_technique_blueprint.json"
     assert cfg.index_db.name == "index.db"
     assert cfg.rag_db.name == "rag.db"
     assert cfg.vector_db.name == "vectors.db"
 
     cfg.ensure_dirs()
     assert cfg.webnovel_dir.exists()
+    assert cfg.chapter_technique_plan_dir.exists()
 
 
 def test_get_config_and_set_project_root(tmp_path):

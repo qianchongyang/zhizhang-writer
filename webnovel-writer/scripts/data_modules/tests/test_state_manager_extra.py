@@ -259,6 +259,45 @@ def test_process_chapter_result_updates_story_memory(temp_project):
     assert story_memory["plot_threads"][0]["status"] == "已回收"
 
 
+def test_process_chapter_result_updates_project_technique_memory(temp_project):
+    manager = StateManager(temp_project, enable_sqlite_sync=False)
+    manager._state["project_info"] = {"genre": "都市异能"}
+    manager._state["chapter_meta"] = {}
+
+    result = {
+        "chapter_meta": {
+            "hook": "身份暴露前夜",
+            "hook_type": "悬念钩",
+            "coolpoint_patterns": ["身份掉马", "反派翻车"],
+            "chapter_type": "confront",
+        },
+        "review_summary": {"overall_score": 84},
+        "technique_execution": {
+            "signals": {
+                "dialogue_exposition_risk": False,
+                "emotion_loop_integrity": True,
+                "aftermath_presence": True,
+                "pattern_redundancy_risk": False,
+            },
+            "applied": ["hook:悬念钩", "coolpoint:身份掉马"],
+            "failed": [],
+        },
+    }
+
+    warnings = manager.process_chapter_result(8, result)
+    assert warnings == []
+
+    project_memory = json.loads(temp_project.project_memory_file.read_text(encoding="utf-8"))
+    assert project_memory["technique_execution_history"][-1]["chapter"] == 8
+    assert "hook:悬念钩" in project_memory["technique_execution_history"][-1]["applied"]
+    assert project_memory["technique_execution_history"][-1]["signals"]["emotion_loop_integrity"] is True
+    pattern = next(
+        row for row in project_memory["technique_patterns"] if row.get("technique_id") == "hook:悬念钩"
+    )
+    assert pattern["use_count"] >= 1
+    assert "hook:悬念钩" in project_memory["technique_summary"]["effective"]
+
+
 def test_process_chapter_result_observer_reflector_pipeline_and_style_fatigue(temp_project):
     manager = StateManager(temp_project, enable_sqlite_sync=False)
     manager._state["protagonist_state"] = {"name": "萧炎"}

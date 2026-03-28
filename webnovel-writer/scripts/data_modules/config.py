@@ -296,6 +296,24 @@ class DataModulesConfig:
     context_temporal_recall_change_limit: int = 5
     context_temporal_recall_relationship_limit: int = 5
     context_temporal_recall_appearance_limit: int = 5
+    # ================= v5.21 Anti-AI 去AI味 =================
+    anti_ai_enabled: bool = True                    # 是否启用 Anti-AI 检查
+    anti_ai_penalty_max: int = 30                  # 最大惩罚分（封顶）
+    anti_ai_fatal_causal_density: float = 5.0      # 因果连接词密度致命线（次/千字）
+    anti_ai_fatal_summary_density: float = 3.0      # 总结归纳词密度致命线（次/千字）
+    anti_ai_fatal_enum_count: int = 1              # 三段式枚举句致命线（处）
+    anti_ai_pass_causal_density: float = 2.0        # 因果连接词密度通过线（次/千字）
+    anti_ai_pass_summary_density: float = 1.0       # 总结归纳词密度通过线（次/千字）
+    anti_ai_pass_short_sentence_min: float = 0.25   # 短句占比最低通过线
+    anti_ai_pass_short_sentence_max: float = 0.45   # 短句占比最高通过线
+    anti_ai_pass_pause_word_min: float = 1.0       # 停顿词密度最低通过线（次/500字）
+    anti_ai_pass_pause_word_max: float = 2.0       # 停顿词密度最高通过线（次/500字）
+    anti_ai_high_risk_penalty_per: int = 5          # 高风险词汇惩罚（每5处扣几分）
+    anti_ai_rewrite_trigger_fatal: int = 1          # 致命线命中N项触发重写
+    anti_ai_rewrite_trigger_pass: int = 3          # 通过线命中N项触发重写
+    anti_ai_rewrite_trigger_high_risk: int = 10     # 高风险词汇命中N项触发重写
+
+    # ================= Style Fatigue =================
     style_fatigue_warn_threshold: int = 3
     style_fatigue_notice_threshold: int = 1
     style_fatigue_known_types: tuple[str, ...] = (

@@ -16,6 +16,7 @@
 - `consistency-checker`
 - `continuity-checker`
 - `ooc-checker`
+- `anti-ai-checker`（v5.21 新增：AI 味指标检测与惩罚分）
 
 条件审查器（仅 `auto` 命中时执行）：
 - `reader-pull-checker`

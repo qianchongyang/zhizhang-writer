@@ -204,3 +204,144 @@ test -f "${PROJECT_ROOT}/.webnovel/project_memory.json"
 pwsh "${CLAUDE_PLUGIN_ROOT}/scripts/run_tests.ps1" -Mode smoke
 pwsh "${CLAUDE_PLUGIN_ROOT}/scripts/run_tests.ps1" -Mode full
 ```
+
+---
+
+## v5.20 章纲硬闸门检查
+
+### 检查上下文构建是否通过硬闸门
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  extract-context --chapter 12 --format text
+```
+
+若失败，优先检查：
+1. `大纲/` 是否存在第 12 章可解析内容
+2. 该章是否具备最小章节契约：目标/冲突/动作/结果/代价/钩子
+3. 若开启状态变化阈值，是否包含可追踪变化词（突破/失去/结盟/暴露/受伤等）
+
+---
+
+## v5.21 Anti-AI 检查
+
+### 检查章节去AI味指标
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  review --chapter 12 --format json
+```
+
+Anti-AI 惩罚分超过 30 分或命中致命线会触发局部重写。
+
+---
+
+## v5.22 Turbo 模式
+
+### 使用 Turbo 模式快速写作
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  write --chapter 12 --turbo
+```
+
+### 检查上下文热缓存
+
+```bash
+ls "${PROJECT_ROOT}/.webnovel/context_hot_cache/"
+cat "${PROJECT_ROOT}/.webnovel/context_hot_cache/cache_manifest.json"
+```
+
+---
+
+## v5.23 健康检查与一致性修复
+
+### 健康检查
+
+```bash
+# 检查单章
+python -X utf8 "${SCRIPTS_DIR}/health_checker.py" --project-root "${PROJECT_ROOT}" --chapter 50
+
+# 检查章节范围
+python -X utf8 "${SCRIPTS_DIR}/health_checker.py" --project-root "${PROJECT_ROOT}" --range 1-100
+
+# 自动检查（每10章）
+python -X utf8 "${SCRIPTS_DIR}/health_checker.py" --project-root "${PROJECT_ROOT}" --auto
+```
+
+### 一致性修复
+
+```bash
+# 预览修复
+python -X utf8 "${SCRIPTS_DIR}/consistency_repair.py" --project-root "${PROJECT_ROOT}" --dry-run
+
+# 执行修复
+python -X utf8 "${SCRIPTS_DIR}/consistency_repair.py" --project-root "${PROJECT_ROOT}" --fix
+
+# 输出 JSON
+python -X utf8 "${SCRIPTS_DIR}/consistency_repair.py" --project-root "${PROJECT_ROOT}" --json
+```
+
+### Git 快照回滚
+
+```bash
+# 查看可用快照
+git tag -l "ch*"
+
+# 回滚到指定章节快照
+git checkout ch0050
+
+# 创建新快照
+git tag -a ch0051 -m "第51章完成"
+```
+
+---
+
+## v5.24 读者反馈与连载经营
+
+### 添加读者反馈
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
+  --add --chapter 50 --type "钩子太弱" --content "第三章结尾的钩子不够吸引人"
+```
+
+### 查看反馈列表
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
+  --list --chapter 50
+```
+
+### 统计反馈
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
+  --stats
+```
+
+### 生成可操作建议
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
+  --suggestions
+```
+
+### 查看连载模板
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
+  --templates
+```
+
+---
+
+## 版本升级检查清单
+
+| 版本 | 核心文件 | 检查项 |
+|------|---------|--------|
+| v5.20 | 大纲契约 | 章纲是否存在、是否满足最小契约 |
+| v5.21 | anti_ai_checker.py | AI味惩罚分、致命线 |
+| v5.22 | context_cache.py | 热缓存TTL、并行审查 |
+| v5.23 | health_checker.py | state/index/memory一致性 |
+| v5.24 | reader_feedback.py | 反馈收集、追读力预警 |

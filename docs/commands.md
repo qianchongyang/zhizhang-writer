@@ -445,11 +445,94 @@ python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" \
 ```
 
 **写作模式：**
-| 模式 | 跳过步骤 | 说明 |
-|------|---------|------|
-| 标准 | 无 | 完整7步流程 |
-| `--fast` | Step 2B | 跳过风格适配 |
-| `--minimal` | Step 2B + 条件审查器 | 只跑核心3个审查器 |
+| 模式 | 速度 | 质量 | 适用 | 步骤 | 审查器 |
+|------|------|------|------|------|--------|
+| 标准 | 慢 | 高 | 重要章节、存稿 | 1→2A→2B→3→4→5→6 | 6个串行 |
+| `--fast` | 中 | 中 | 日常更新 | 1→2A→3→4→5→6 | 6个串行 |
+| `--turbo` (v5.22) | 快 | 中 | 赶稿 | 1→2A→3→5→6 | 核心3个并行 |
+| `--minimal` | 最快 | 低 | 草稿测试 | 1→2A→3→4→5→6 | 核心3个串行 |
+
+### `--turbo` 模式（v5.22）
+
+Turbo 模式跳过润色步骤，核心审查器并行执行，平均耗时下降 ≥50%。
+
+```bash
+/webnovel-write 45 --turbo
+```
+
+---
+
+## 十四、运维与健康检查（v5.23）
+
+### 健康检查
+
+```bash
+# 检查单章健康状态
+python -X utf8 "${SCRIPTS_DIR}/health_checker.py" --project-root "${PROJECT_ROOT}" --chapter 50
+
+# 检查章节范围
+python -X utf8 "${SCRIPTS_DIR}/health_checker.py" --project-root "${PROJECT_ROOT}" --range 1-100
+
+# 自动检查（每10章）
+python -X utf8 "${SCRIPTS_DIR}/health_checker.py" --project-root "${PROJECT_ROOT}" --auto
+```
+
+### 一致性修复
+
+```bash
+# 预览修复
+python -X utf8 "${SCRIPTS_DIR}/consistency_repair.py" --project-root "${PROJECT_ROOT}" --dry-run
+
+# 执行修复
+python -X utf8 "${SCRIPTS_DIR}/consistency_repair.py" --project-root "${PROJECT_ROOT}" --fix
+```
+
+### Git 快照回滚
+
+```bash
+# 查看可用快照
+git tag -l "ch*"
+
+# 回滚到指定章节
+git checkout ch0050
+```
+
+---
+
+## 十五、读者反馈与连载经营（v5.24）
+
+### 添加读者反馈
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" \
+  --add --chapter 50 --type "钩子太弱" --content "第三章结尾的钩子不够吸引人"
+```
+
+### 查看反馈
+
+```bash
+# 列出章节反馈
+python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" --list --chapter 50
+
+# 统计所有反馈
+python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" --stats
+
+# 获取可操作建议
+python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" --suggestions
+
+# 查看连载模板
+python -X utf8 "${SCRIPTS_DIR}/reader_feedback.py" --project-root "${PROJECT_ROOT}" --templates
+```
+
+### 反馈类型
+
+| 类型 | 说明 |
+|------|------|
+| 钩子太弱 | 章末钩子不够吸引人 |
+| 节奏太慢 | 说明性文字过多，事件密度低 |
+| 角色OOC | 人物行为偏离人设 |
+| 文笔问题 | 总结腔/学术腔过重 |
+| 其他 | 其他类型反馈 |
 
 ---
 

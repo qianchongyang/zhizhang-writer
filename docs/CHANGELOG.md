@@ -4,6 +4,128 @@
 
 ---
 
+## v5.24.0 (2026-03-28)
+
+**经营化版**
+
+### 核心升级
+- 新增 `reader_feedback.py` 读者反馈模块，支持手工输入反馈
+- 反馈类型：钩子太弱/节奏太慢/角色OOC/文笔问题/其他
+- 新增连载模板：日更模板/周更模板
+- 新增 `get_actionable_suggestions()` 生成可操作建议反哺写作
+
+### 配置更新
+- `reader_feedback_enabled`: 是否启用读者反馈
+- `reader_pull_warning_threshold`: 追读力预警阈值
+- `reader_pull_critical_threshold`: 追读力危急阈值
+
+### 使用方式
+```bash
+python reader_feedback.py --add --chapter 50 --type "钩子太弱" --content "第三章结尾的钩子不够吸引人"
+python reader_feedback.py --list --chapter 50
+python reader_feedback.py --stats
+python reader_feedback.py --suggestions
+python reader_feedback.py --templates
+```
+
+---
+
+## v5.23.0 (2026-03-28)
+
+**稳定性版**
+
+### 核心升级
+- 新增 `health_checker.py` 连ol健康检查器，每10章自动体检
+- 新增 `consistency_repair.py` 一致性修复脚本
+- 检查 state.json、index.db、story_memory.json 三方一致性
+- 支持 Git 版本控制的快照与回滚
+
+### 健康检查项
+| 检查项 | 严重度 |
+|--------|--------|
+| state.json 存在性 | critical |
+| index.db 与 state 一致性 | high |
+| story_memory 完整性 | medium |
+| 章节文件连续性 | medium |
+| 伏笔回收过期 | medium |
+
+### 使用方式
+```bash
+python health_checker.py --chapter 50
+python health_checker.py --range 1-100
+python health_checker.py --auto
+
+python consistency_repair.py --dry-run
+python consistency_repair.py --fix
+```
+
+---
+
+## v5.22.0 (2026-03-28)
+
+**提速版（Turbo 模式）**
+
+### 核心升级
+- 新增 `--turbo` 模式：Step 1→2A→3→5→6，跳过润色
+- 审查并行化：核心3个审查器并行执行
+- 上下文热缓存：缓存近3章上下文，TTL 1小时
+
+### 性能目标
+- `--turbo` 平均耗时下降 ≥ 50%
+- 与标准模式相比质量下降 ≤ 8 分
+
+### 模式对比
+| 模式 | 步骤 | 审查器 |
+|------|------|--------|
+| 标准 | 1→2A→2B→3→4→5→6 | 6个串行 |
+| `--fast` | 1→2A→3→4→5→6 | 6个串行 |
+| `--turbo` | 1→2A→3→5→6 | 核心3个并行 |
+| `--minimal` | 1→2A→3→4→5→6 | 核心3个串行 |
+
+---
+
+## v5.21.0 (2026-03-28)
+
+**去AI味版**
+
+### 核心升级
+- 新增 `anti_ai_checker.py` Anti-AI 检查器
+- 7层检测规则：词汇/句式/形容词/成语/对白/段落/标点
+- 200+ 高风险词汇库
+- AI味惩罚分机制（封顶30分）
+- 局部重写触发器
+
+### 量化阈值
+| 指标 | 通过线 | 致命线 |
+|------|-------|--------|
+| 因果连接词密度 | ≤2次/千字 | ≥5次/千字 |
+| 总结归纳词密度 | ≤1次/千字 | ≥3次/千字 |
+| 三段式枚举句 | 0处 | ≥1处 |
+| 短句占比 | 25-45% | <15% 或 >60% |
+
+### 触发重写条件（满足任一）
+1. 致命线命中 ≥1 项
+2. 通过线命中 ≥3 项
+3. 高风险词汇命中 ≥10 处
+
+---
+
+## v5.20.0 (2026-03-28)
+
+**止血版**
+
+### 核心升级
+- 章纲硬闸门：缺失大纲直接阻断
+- 最小章节契约：目标/冲突/动作/结果/代价/钩子
+- 状态变化约束：可识别变化词检测
+
+### 写前硬闸门（v5.20）
+- 必须存在本章可用大纲
+- 大纲需满足最小章节契约
+- 可选状态变化阈值
+
+---
+
 ## v5.18.0 (2026-03-27)
 
 **时序记忆增强**

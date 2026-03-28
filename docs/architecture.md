@@ -27,17 +27,20 @@
 ## 总体架构图
 
 ```text
-┌─────────────────────────────────────────────────────────────┐
-│                      Claude Code                           │
-├─────────────────────────────────────────────────────────────┤
-│  Skills (7个): init / plan / write / review / query / ... │
-├─────────────────────────────────────────────────────────────┤
-│  Agents (8个): Context / Data / 多维 Checker               │
-├─────────────────────────────────────────────────────────────┤
-│  Data Layer: state.json / index.db / vectors.db /          │
-│              story_memory.json / project_memory.json /     │
-│              story_technique_blueprint.json                │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│                           Claude Code                               │
+├──────────────────────────────────────────────────────────────────────┤
+│ Skills (9个): init / plan / write / review / query / adjust /       │
+│             resume / dashboard / learn                               │
+├──────────────────────────────────────────────────────────────────────┤
+│ Agents (9个): Context / Data / 6个审查器 / logic-bug-checker         │
+├──────────────────────────────────────────────────────────────────────┤
+│ Unified CLI: webnovel.py (preflight/where/use/index/state/rag/...)  │
+├──────────────────────────────────────────────────────────────────────┤
+│ Data Layer: state.json / story_memory.json / index.db / vectors.db  │
+│             project_memory.json / story_technique_blueprint.json     │
+│             control/chapter_intents / chapter_technique_plans        │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ## 三层结构
@@ -72,6 +75,7 @@
 - `context_manager / extract_chapter_context`：把控制面、真相层和大纲编译成可写作上下文
 - `technique_blueprint.py`：把题材、记忆、读者信号编译成技巧蓝图与章节技巧编排
 - `workflow_manager`：记录 `workflow_trace`
+- `webnovel.py`：统一 CLI 入口（preflight/where/use/index/state/rag/...）
 - `dashboard`：展示任务书、召回、风险、记忆健康和运行阶段
 
 运行层负责“编译、展示、追溯”，不应私自篡改事实。
@@ -82,11 +86,22 @@
 
 职责：在写作前构建“创作任务书”，提供本章上下文、约束和追读力策略。
 
+写前硬闸门（v5.20）：
+
+- 必须存在本章可用大纲（缺失直接阻断）
+- 默认要求大纲满足最小章节契约（目标/冲突/动作/结果/代价/钩子）
+- 可选要求最小状态变化信号（由 `context_min_state_changes_per_chapter` 控制）
+
 ### Data Agent（写）
 
 职责：从正文提取实体与状态变化，更新 `state.json`、`index.db`、`vectors.db` 与 `story_memory.json`，保证数据链闭环。
 
 `story_memory.json` 负责承载跨章节稳定记忆，包括角色阶段摘要、伏笔状态、近章事件、结构化变化账本、情感弧线与归档层；`state.json` 继续承载当前工作态，`index.db` 和 `vectors.db` 继续负责历史索引与语义召回。
+
+### 扩展审查 Agent
+
+- `logic-bug-checker`：用于补充检查情节逻辑漏洞/因果断裂（可按流程需要启用）
+- 与分组审查并存，不替代核心 3 个与条件 3 个审查器
 
 ## 分组审查架构
 

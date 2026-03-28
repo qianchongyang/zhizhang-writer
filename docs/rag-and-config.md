@@ -18,6 +18,17 @@
 2. 书项目根目录下的 `.env`
 3. 用户级全局：`~/.claude/webnovel-writer/.env`
 
+## 上下文硬闸门相关配置（DataModulesConfig）
+
+- `context_require_chapter_outline`（默认 `true`）
+  - 是否强制要求章节大纲存在
+- `context_require_chapter_contract`（默认 `true`）
+  - 是否强制要求最小章节契约（目标/冲突/动作/结果/代价/钩子）
+- `context_min_state_changes_per_chapter`（默认 `0`）
+  - 每章最小状态变化信号阈值，`0` 表示不强制
+
+建议：先保持默认；当项目进入中后期、需要更强可追踪性时，再将 `context_min_state_changes_per_chapter` 提升到 `1`。
+
 ## `.env` 最小配置
 
 ```bash
@@ -34,3 +45,4 @@ RERANK_API_KEY=your_rerank_api_key
 
 - 未配置 Embedding Key 时，语义检索会回退到 BM25。
 - 推荐每本书单独配置 `${PROJECT_ROOT}/.env`，避免多项目串配置。
+- 统一通过 `webnovel.py` 入口调用 RAG 能避免参数顺序/路径解析问题。

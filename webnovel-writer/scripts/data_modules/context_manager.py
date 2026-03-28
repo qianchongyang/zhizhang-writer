@@ -15,9 +15,17 @@ from runtime_compat import enable_windows_utf8_stdio
 from typing import Any, Dict, List, Optional
 
 try:
-    from chapter_outline_loader import load_chapter_outline
+    from chapter_outline_loader import (
+        is_missing_chapter_outline,
+        load_chapter_outline,
+        validate_chapter_contract,
+    )
 except ImportError:  # pragma: no cover
-    from scripts.chapter_outline_loader import load_chapter_outline
+    from scripts.chapter_outline_loader import (
+        is_missing_chapter_outline,
+        load_chapter_outline,
+        validate_chapter_contract,
+    )
 
 from .config import get_config
 from .index_manager import IndexManager, WritingChecklistScoreMeta
@@ -51,6 +59,29 @@ from .technique_blueprint import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _friendly_context_error(error: Exception) -> str:
+    message = str(error)
+    hints = ["请检查项目结构与依赖文件。"]
+
+    if "缺少可用大纲" in message:
+        hints = [
+            "请在 `大纲/` 下补齐对应章节大纲后重试。",
+            "可先执行 `webnovel.py extract-context --chapter N --format text` 做写前自检。",
+        ]
+    elif "缺少关键项" in message or "最小章节契约" in message:
+        hints = [
+            "请补齐最小章节契约：目标/冲突/动作/结果/代价/钩子。",
+            "建议采用 `字段: 内容` 的结构化写法，避免解析失败。",
+        ]
+    elif "状态变化" in message:
+        hints = [
+            "请在章纲或任务书中补充可追踪变化（资源/关系/认知/位置/战力）。",
+            "若当前为试写阶段，可临时降低 `context_min_state_changes_per_chapter`。",
+        ]
+
+    return f"{message} | 修复建议：{'；'.join(hints)}"
 
 
 class ContextManager:
@@ -460,6 +491,9 @@ class ContextManager:
             current_focus=current_focus,
             writing_guidance=writing_guidance,
         )
+        self._validate_chapter_contract(chapter, chapter_intent)
+        self._validate_state_change_minimum(chapter, story_recall)
+
         chapter_technique_plan = self._build_chapter_technique_plan(
             chapter=chapter,
             chapter_outline=chapter_outline,
@@ -782,6 +816,51 @@ class ContextManager:
         if latest_state and latest_state in negative_states and any(cue in lowered for cue in positive_cues):
             risks.append(f"{protagonist_name} 当前情绪为“{latest_state}”，与本章目标语气可能冲突")
         return risks
+
+    def _validate_chapter_contract(self, chapter: int, chapter_intent: Dict[str, Any]) -> None:
+        if not bool(getattr(self.config, "context_require_chapter_contract", True)):
+            return
+
+        required_fields = {
+            "chapter_goal": "目标",
+            "must_resolve": "冲突",
+            "story_risks": "动作/阻力",
+            "focus_title": "钩子",
+        }
+
+        missing_labels: List[str] = []
+        for field, label in required_fields.items():
+            value = chapter_intent.get(field)
+            if isinstance(value, str):
+                if not value.strip():
+                    missing_labels.append(label)
+                continue
+            if isinstance(value, list):
+                if not any(str(item).strip() for item in value):
+                    missing_labels.append(label)
+                continue
+            if not value:
+                missing_labels.append(label)
+
+        if missing_labels:
+            joined = "、".join(missing_labels)
+            raise ValueError(
+                f"第{chapter}章未满足最小章节契约，缺少：{joined}。请先补充章节任务书后再写作。"
+            )
+
+    def _validate_state_change_minimum(self, chapter: int, story_recall: Dict[str, Any]) -> None:
+        minimum = int(getattr(self.config, "context_min_state_changes_per_chapter", 1) or 0)
+        if minimum <= 0:
+            return
+
+        change_focus = story_recall.get("structured_change_focus") or []
+        if not isinstance(change_focus, list):
+            change_focus = []
+
+        if len(change_focus) < minimum:
+            raise ValueError(
+                f"第{chapter}章缺少可追踪状态变化（至少{minimum}项）。请在章纲或任务书中明确资源/关系/认知/位置/战力变化。"
+            )
 
     def _build_chapter_intent(
         self,
@@ -1115,7 +1194,23 @@ class ContextManager:
         return json.loads(path.read_text(encoding="utf-8"))
 
     def _load_outline(self, chapter: int) -> str:
-        return load_chapter_outline(self.config.project_root, chapter, max_chars=1500)
+        outline = load_chapter_outline(self.config.project_root, chapter, max_chars=1500)
+        if bool(getattr(self.config, "context_require_chapter_outline", True)) and is_missing_chapter_outline(outline):
+            raise ValueError(
+                f"第{chapter}章缺少可用大纲。请先在`大纲/`补齐章节大纲，再执行写作流程。"
+            )
+
+        if bool(getattr(self.config, "context_require_chapter_contract", True)):
+            min_state_changes = max(0, int(getattr(self.config, "context_min_state_changes_per_chapter", 0)))
+            missing = validate_chapter_contract(outline, min_state_changes=min_state_changes)
+            if missing:
+                missing_text = "、".join(missing)
+                raise ValueError(
+                    f"第{chapter}章大纲缺少关键项：{missing_text}。"
+                    "请补齐‘目标/冲突/动作/结果/代价/钩子’，并至少包含可识别的状态变化。"
+                )
+
+        return outline
 
     def _load_recent_summaries(self, chapter: int, window: int = 3) -> List[Dict[str, Any]]:
         summaries = []
@@ -1653,10 +1748,11 @@ def main():
         except Exception as exc:
             logger.warning("failed to log successful tool call: %s", exc)
     except Exception as exc:
-        print_error("CONTEXT_BUILD_FAILED", str(exc), suggestion="请检查项目结构与依赖文件")
+        friendly = _friendly_context_error(exc)
+        print_error("CONTEXT_BUILD_FAILED", friendly, suggestion="请按修复建议补齐章纲/任务书后重试")
         try:
             manager.index_manager.log_tool_call(
-                "context_manager:build", False, error_code="CONTEXT_BUILD_FAILED", error_message=str(exc), chapter=args.chapter
+                "context_manager:build", False, error_code="CONTEXT_BUILD_FAILED", error_message=friendly, chapter=args.chapter
             )
         except Exception as log_exc:
             logger.warning("failed to log failed tool call: %s", log_exc)

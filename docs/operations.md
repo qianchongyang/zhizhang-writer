@@ -99,6 +99,14 @@ export PROJECT_ROOT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-roo
 python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" preflight
 ```
 
+### 绑定当前项目指针
+
+当工作区内有多个项目时，可手动绑定当前指针：
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" use "${PROJECT_ROOT}"
+```
+
 ### 检查技巧运行时文件
 
 ```bash
@@ -106,6 +114,19 @@ ls "${PROJECT_ROOT}/.webnovel/story_technique_blueprint.json"
 ls "${PROJECT_ROOT}/.webnovel/project_memory.json"
 ls "${PROJECT_ROOT}/.webnovel/control/chapter_technique_plans"
 ```
+
+### 检查章节上下文硬闸门（v5.20）
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  extract-context --chapter 12 --format text
+```
+
+若失败，优先检查：
+
+1. `大纲/` 是否存在第 12 章可解析内容
+2. 该章是否具备最小章节契约：目标/冲突/动作/结果/代价/钩子
+3. 若项目开启状态变化阈值，是否包含可追踪变化词（突破/失去/结盟/暴露/受伤等）
 
 ### 索引重建
 
@@ -149,6 +170,22 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
 - 回写 `project_memory.json`
 - 驱动后续章节的技巧疲劳规避
 - 给润色阶段提供“说明腔 / 余波缺失 / 同构重复”信号
+
+## Step 5 状态变化后置校验（v5.20 C1）
+
+`state process-chapter` 在 Data Agent 提取后会做最小状态变化检查：
+
+- 若状态变化不足：
+  - `chapter_meta.{NNNN}.progress_flags` 写入 `insufficient_state_change`
+  - `chapter_meta.{NNNN}.progress_warnings` 写入修复建议
+  - CLI `warnings` 返回“推进不足”提示
+
+示例（手动排查）：
+
+```bash
+python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+  state process-chapter --chapter 12 --data "@${PROJECT_ROOT}/.webnovel/tmp/data_agent_result.json"
+```
 
 ### 旧项目升级自检
 

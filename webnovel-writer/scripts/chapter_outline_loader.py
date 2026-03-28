@@ -14,6 +14,98 @@ except ImportError:  # pragma: no cover
 
 
 _CHAPTER_RANGE_RE = re.compile(r"^\s*(\d+)\s*-\s*(\d+)\s*$")
+_OUTLINE_MISSING_PREFIXES = (
+    "⚠️ 大纲文件不存在",
+    "⚠️ 未找到第",
+)
+
+_CHAPTER_CONTRACT_FIELDS = {
+    "goal": ("目标", "目的"),
+    "conflict": ("冲突", "阻力", "对手"),
+    "action": ("动作", "行动", "计划"),
+    "result": ("结果", "产出", "变化"),
+    "cost": ("代价", "损失", "牺牲"),
+    "hook": ("钩子", "悬念", "未解", "反问"),
+}
+
+_STATE_CHANGE_KEYWORDS = (
+    "提升",
+    "下降",
+    "获得",
+    "失去",
+    "突破",
+    "暴露",
+    "结盟",
+    "破裂",
+    "离开",
+    "到达",
+    "转移",
+    "受伤",
+    "升级",
+    "进入",
+    "退出",
+    "成功",
+    "失败",
+)
+
+
+def is_missing_chapter_outline(outline_text: object) -> bool:
+    text = str(outline_text or "").strip()
+    if not text:
+        return True
+    return any(text.startswith(prefix) for prefix in _OUTLINE_MISSING_PREFIXES)
+
+
+def extract_chapter_contract(outline_text: object) -> dict[str, str]:
+    text = str(outline_text or "")
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    contract: dict[str, str] = {}
+    for line in lines:
+        for key, labels in _CHAPTER_CONTRACT_FIELDS.items():
+            if key in contract:
+                continue
+            for label in labels:
+                pattern = rf"^[-*\s]*{re.escape(label)}\s*[:：]\s*(.+)$"
+                match = re.search(pattern, line)
+                if match:
+                    contract[key] = match.group(1).strip()
+                    break
+    return contract
+
+
+def count_state_change_signals(contract: dict[str, str], outline_text: object) -> int:
+    candidates = []
+    if isinstance(contract, dict):
+        for key in ("result", "cost", "action"):
+            value = contract.get(key)
+            if value:
+                candidates.append(str(value))
+    candidates.append(str(outline_text or ""))
+
+    score = 0
+    for text in candidates:
+        for keyword in _STATE_CHANGE_KEYWORDS:
+            if keyword in text:
+                score += 1
+    return score
+
+
+def validate_chapter_contract(outline_text: object, min_state_changes: int = 0) -> list[str]:
+    if is_missing_chapter_outline(outline_text):
+        return ["outline_missing"]
+
+    contract = extract_chapter_contract(outline_text)
+    missing: list[str] = []
+    for key, labels in _CHAPTER_CONTRACT_FIELDS.items():
+        if key not in contract:
+            missing.append(labels[0])
+
+    if min_state_changes > 0:
+        signals = count_state_change_signals(contract, outline_text)
+        if signals < min_state_changes:
+            missing.append("状态变化")
+
+    return missing
 
 
 def _parse_chapters_range(value: object) -> tuple[int, int] | None:

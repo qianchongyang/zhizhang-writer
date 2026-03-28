@@ -221,6 +221,9 @@ class DataModulesConfig:
     max_state_changes: int = 2000
 
     context_recent_summaries_window: int = 3
+    context_require_chapter_outline: bool = True
+    context_require_chapter_contract: bool = True
+    context_min_state_changes_per_chapter: int = 0
     context_recent_meta_window: int = 3
     context_alerts_slice: int = 10
     context_max_appearing_characters: int = 10

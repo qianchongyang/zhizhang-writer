@@ -27,6 +27,19 @@ from data_modules.query_router import QueryRouter
 def temp_project(tmp_path):
     cfg = DataModulesConfig.from_project_root(tmp_path)
     cfg.ensure_dirs()
+    outline_dir = cfg.outline_dir
+    outline_dir.mkdir(parents=True, exist_ok=True)
+    outline_lines = ["# 第1卷 详细大纲"]
+    for ch in range(1, 251):
+        outline_lines.append(f"### 第{ch}章：测试标题{ch}")
+        outline_lines.append("目标：推进主线")
+        outline_lines.append("冲突：遭遇阻力")
+        outline_lines.append("动作：主动调查")
+        outline_lines.append("结果：获得线索并突破")
+        outline_lines.append("代价：暴露行踪")
+        outline_lines.append("钩子：更大危机显现")
+        outline_lines.append("")
+    (outline_dir / "第1卷-详细大纲.md").write_text("\n".join(outline_lines), encoding="utf-8")
     return cfg
 
 
@@ -114,7 +127,8 @@ def test_context_manager_loads_volume_outline_file(temp_project):
     temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
     temp_project.outline_dir.mkdir(parents=True, exist_ok=True)
     (temp_project.outline_dir / "第1卷-详细大纲.md").write_text(
-        "### 第2章：测试标题\n测试大纲\n\n### 第3章：下一章",
+        "### 第2章：测试标题\n目标：推进主线\n冲突：遭遇阻力\n动作：主动调查\n结果：获得线索并突破\n代价：暴露行踪\n钩子：更大危机显现\n\n"
+        "### 第3章：下一章\n目标：继续推进\n冲突：敌方压制\n动作：主动应对\n结果：成功反制并提升\n代价：失去掩护\n钩子：新变量出现",
         encoding="utf-8",
     )
 
@@ -123,7 +137,151 @@ def test_context_manager_loads_volume_outline_file(temp_project):
 
     outline = payload["sections"]["core"]["content"]["chapter_outline"]
     assert "### 第2章：测试标题" in outline
-    assert "测试大纲" in outline
+    assert "目标：推进主线" in outline
+
+
+def test_context_manager_raises_when_outline_missing(temp_project):
+    state = {
+        "progress": {
+            "volumes_planned": [
+                {"volume": 1, "chapters_range": "1-10"},
+            ]
+        },
+        "protagonist_state": {},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    (temp_project.outline_dir / "第1卷-详细大纲.md").unlink(missing_ok=True)
+
+    manager = ContextManager(temp_project)
+    with pytest.raises(ValueError, match="缺少可用大纲"):
+        manager.build_context(2, use_snapshot=False, save_snapshot=False)
+
+
+def test_context_manager_raises_when_outline_contract_missing(temp_project):
+    state = {
+        "progress": {
+            "volumes_planned": [
+                {"volume": 1, "chapters_range": "1-10"},
+            ]
+        },
+        "protagonist_state": {},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    (temp_project.outline_dir / "第1卷-详细大纲.md").write_text("### 第2章：只有标题\n没有结构化契约", encoding="utf-8")
+
+    manager = ContextManager(temp_project)
+    with pytest.raises(ValueError, match="缺少关键项"):
+        manager.build_context(2, use_snapshot=False, save_snapshot=False)
+
+
+def test_context_manager_raises_when_min_state_changes_not_met(temp_project):
+    state = {
+        "progress": {
+            "volumes_planned": [
+                {"volume": 1, "chapters_range": "1-10"},
+            ]
+        },
+        "protagonist_state": {},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    (temp_project.outline_dir / "第1卷-详细大纲.md").write_text(
+        "### 第2章：结构化但无状态变化\n目标：调查\n冲突：阻力\n动作：潜入\n结果：拿到情报\n代价：疲惫\n钩子：幕后现身",
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    manager.config.context_min_state_changes_per_chapter = 1
+    with pytest.raises(ValueError, match="状态变化"):
+        manager.build_context(2, use_snapshot=False, save_snapshot=False)
+
+
+def test_context_manager_raises_when_chapter_contract_missing(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    temp_project.current_focus_file.write_text(json.dumps({}, ensure_ascii=False), encoding="utf-8")
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 1,
+                "characters": {},
+                "plot_threads": [],
+                "recent_events": [],
+                "structured_change_ledger": [],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    manager.config.context_current_focus_auto_generate = False
+    with pytest.raises(ValueError, match="最小章节契约"):
+        manager.build_context(2, use_snapshot=False, save_snapshot=False)
+
+
+def test_context_manager_raises_when_state_change_missing(temp_project):
+    state = {
+        "protagonist_state": {"name": "萧炎"},
+        "chapter_meta": {},
+        "disambiguation_warnings": [],
+        "disambiguation_pending": [],
+    }
+    temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
+    temp_project.current_focus_file.write_text(
+        json.dumps(
+            {
+                "title": "推进主线",
+                "goal": "本章推进主线冲突",
+                "must_resolve": ["确认敌方动机"],
+                "hard_constraints": ["保持主线聚焦"],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    temp_project.story_memory_file.write_text(
+        json.dumps(
+            {
+                "version": "1",
+                "last_consolidated_chapter": 1,
+                "characters": {},
+                "plot_threads": [],
+                "recent_events": [],
+                "structured_change_ledger": [],
+                "chapter_snapshots": [],
+                "meta": {},
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    temp_project.outline_dir.mkdir(parents=True, exist_ok=True)
+    (temp_project.outline_dir / "第1卷-详细大纲.md").write_text(
+        "### 第2章：结构化但无状态变化\n目标：调查\n冲突：阻力\n动作：潜入\n结果：拿到情报\n代价：疲惫\n钩子：幕后现身",
+        encoding="utf-8",
+    )
+
+    manager = ContextManager(temp_project)
+    manager.config.context_min_state_changes_per_chapter = 1
+    with pytest.raises(ValueError, match="状态变化"):
+        manager.build_context(2, use_snapshot=False, save_snapshot=False)
 
 
 def test_query_router():
@@ -298,7 +456,7 @@ def test_context_manager_auto_generates_current_focus_when_missing(temp_project)
     )
     temp_project.outline_dir.mkdir(parents=True, exist_ok=True)
     (temp_project.outline_dir / "第1卷-详细大纲.md").write_text(
-        "### 第7章：测试标题\n本章庆功宴上追查身世线第一层答案。",
+        "### 第7章：测试标题\n目标：追查身世线第一层答案\n冲突：庆功宴被对手搅局\n动作：顺势布控调查\n结果：锁定关键证据并突破\n代价：暴露旧伤\n钩子：幕后主使浮出水面",
         encoding="utf-8",
     )
 
@@ -628,7 +786,7 @@ def test_context_manager_recalls_archive_when_outline_matches(temp_project):
     temp_project.state_file.write_text(json.dumps(state, ensure_ascii=False), encoding="utf-8")
     temp_project.outline_dir.mkdir(parents=True, exist_ok=True)
     (temp_project.outline_dir / "第1卷-详细大纲.md").write_text(
-        "### 第13章：旧玉佩线索重现\n主角需追查来历。",
+        "### 第13章：旧玉佩线索重现\n目标：追查旧玉佩来历\n冲突：敌方先手拦截\n动作：反向设局调查\n结果：找到旧玉佩关键证据\n代价：暴露藏身点\n钩子：真正幕后浮现",
         encoding="utf-8",
     )
     temp_project.story_memory_file.write_text(
@@ -879,6 +1037,11 @@ def test_context_manager_dynamic_weights_and_composite_genre(temp_project):
 
     state = {
         "project": {"genre": "xuanhuan+realistic"},
+        "progress": {
+            "volumes_planned": [
+                {"volume": 1, "chapters_range": "1-300"},
+            ]
+        },
         "protagonist_state": {"name": "萧炎"},
         "chapter_meta": {},
         "disambiguation_warnings": [],

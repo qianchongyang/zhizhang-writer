@@ -277,6 +277,8 @@ def init_project(
         ".webnovel/backups",
         ".webnovel/archive",
         ".webnovel/summaries",
+        ".webnovel/control/chapter_technique_plans",
+        ".webnovel/control/chapter_intents",
         "设定集/角色库/主要角色",
         "设定集/角色库/次要角色",
         "设定集/角色库/反派角色",

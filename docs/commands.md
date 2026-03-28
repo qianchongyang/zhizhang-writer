@@ -94,6 +94,10 @@ PROJECT_ROOT/
 
 ```
 Step 1 - 上下文构建
+  → 写前硬闸门（不通过即中断）：
+      • 本章必须存在可用大纲
+      • 大纲需满足最小章节契约：目标/冲突/动作/结果/代价/钩子
+      • 可选状态变化阈值：`context_min_state_changes_per_chapter`
   → Context Agent 加载：
       • 本章大纲
       • 前3章摘要
@@ -146,7 +150,7 @@ Step 2B → 风格适配（--fast/--minimal 跳过）
 Step 3 → 分组审查（核心3个 + 条件3个）
 Step 4 → 润色（问题修复 + Anti-AI 检测）
 Step 5 → Data Agent（状态、索引、技巧记忆回写）
-Step 6 → Git 备份
+Step 6 → Git 备份（若 Git 可用）
 ```
 
 **写作模式：**
@@ -379,6 +383,21 @@ python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" \
 3. **质量门控**：首次写作建议用默认值 75 分，确认流程稳定后可提高
 4. **定期检查**：每隔 10 章检查一次输出质量
 5. **及时备份**：定期提交 git，保留历史版本
+6. **写前契约检查**：批量前先确认各章大纲具备“目标/冲突/动作/结果/代价/钩子”，避免中途被硬闸门拦截
+
+### 常见失败与修复
+
+- 报错：`缺少可用大纲`
+  - 含义：`大纲/` 下未找到对应章节可解析内容
+  - 修复：补齐卷纲或章节大纲后重试
+
+- 报错：`大纲缺少关键项`
+  - 含义：未满足最小章节契约（目标/冲突/动作/结果/代价/钩子）
+  - 修复：在该章大纲中逐项补齐，建议使用 `字段: 内容` 结构
+
+- 报错：`状态变化`
+  - 含义：启用最小状态变化阈值时，可识别状态变化信号不足
+  - 修复：在动作/结果/代价中加入可追踪变化（如“突破/失去/结盟/暴露/受伤/离开”等）
 
 ---
 
@@ -436,6 +455,8 @@ python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" \
 
 ## 十二、命令索引
 
+### Skill 命令
+
 | 命令 | 作用 | 使用频率 |
 |------|------|---------|
 | `/webnovel-init` | 初始化项目 | 1次/项目 |
@@ -447,6 +468,20 @@ python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" \
 | `/webnovel-resume` | 恢复任务 | 按需 |
 | `/webnovel-dashboard` | 可视化面板 | 按需 |
 | `/webnovel-learn [内容]` | 记录模式 | 按需 |
+
+### Unified CLI 子命令（工程/运维层）
+
+统一入口：`python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" ...`
+
+| 子命令 | 作用 |
+|------|------|
+| `preflight` | 环境与路径预检 |
+| `where` | 解析并输出当前 project_root |
+| `use` | 绑定当前工作区的项目指针 |
+| `index/state/rag/context/style/entity/migrate` | 数据与检索链路操作 |
+| `workflow/status/update-state/backup/archive` | 运维与状态维护脚本转发 |
+| `extract-context` | 导出章节上下文（text/json，受大纲与章节契约硬闸门约束） |
+| `merge` | 合并分组审查结果（`rev1/rev2`） |
 
 ---
 

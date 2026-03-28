@@ -257,8 +257,55 @@ class TestStateManager:
         changes = manager.get_state_changes("xiaoyan")
         assert len(changes) == 1
 
+        # 有状态变化时不应提示推进不足
+        assert all("推进不足" not in warning for warning in warnings)
+
         # 验证进度更新
         assert manager.get_current_chapter() == 100
+        assert not any("推进不足" in msg for msg in warnings)
+
+    def test_flag_when_no_state_change(self, temp_project):
+        manager = StateManager(temp_project)
+
+        result = {
+            "entities_appeared": [{"id": "xiaoyan", "mentions": ["萧炎", "他"]}],
+            "entities_new": [],
+            "state_changes": [],
+            "relationships_new": [],
+            "chapter_meta": {"hook": "黑影现身"},
+        }
+
+        manager.add_entity(EntityState(id="xiaoyan", name="萧炎", type="角色"))
+
+        warnings = manager.process_chapter_result(12, result)
+        manager.save_state()
+
+        state = json.loads(temp_project.state_file.read_text(encoding="utf-8"))
+        meta = (state.get("chapter_meta") or {}).get("0012") or {}
+
+        assert "insufficient_state_change" in (meta.get("progress_flags") or [])
+        assert any("状态变化" in item for item in (meta.get("progress_warnings") or []))
+        assert any("推进不足" in msg for msg in warnings)
+
+    def test_flag_when_no_state_change(self, temp_project):
+        manager = StateManager(temp_project)
+        manager.add_entity(EntityState(id="xiaoyan", name="萧炎", type="角色"))
+
+        result = {
+            "entities_appeared": [{"id": "xiaoyan", "mentions": ["萧炎"]}],
+            "entities_new": [],
+            "state_changes": [],
+            "relationships_new": [],
+        }
+
+        warnings = manager.process_chapter_result(12, result)
+        manager.save_state()
+
+        state = json.loads(temp_project.state_file.read_text(encoding="utf-8"))
+        chapter_meta = state.get("chapter_meta", {}).get("0012", {})
+        assert "insufficient_state_change" in (chapter_meta.get("progress_flags") or [])
+        assert any("状态变化" in msg for msg in chapter_meta.get("progress_warnings") or [])
+        assert any("推进不足" in warning for warning in warnings)
 
     def test_save_state_with_init_project_schema(self, temp_project):
         """回归：init_project 生成的 state.json，StateManager 仍应可写入。(v5.1 SQLite-only)"""

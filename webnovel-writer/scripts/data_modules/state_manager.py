@@ -1337,6 +1337,10 @@ class StateManager:
             # v5.1 引入: 缓存用于 SQLite 同步
             self._pending_sqlite_data["state_changes"].append(change)
 
+        state_change_count = len(result.get("state_changes") or [])
+        state_change_required = max(1, int(getattr(self.config, "context_min_state_changes_per_chapter", 1) or 1))
+        state_change_ok = state_change_count >= state_change_required
+
         # 处理关系
         for rel in result.get("relationships_new", []):
             self.add_relationship(
@@ -1354,12 +1358,25 @@ class StateManager:
 
         # 写入 chapter_meta（钩子/模式/结束状态）
         chapter_meta = result.get("chapter_meta")
-        if isinstance(chapter_meta, dict):
-            style_fatigue_entries = self._normalize_style_fatigue_entries(result.get("style_fatigue"))
-            if style_fatigue_entries:
-                chapter_meta = dict(chapter_meta)
-                chapter_meta["style_fatigue"] = style_fatigue_entries
-                result["chapter_meta"] = chapter_meta
+        if not isinstance(chapter_meta, dict):
+            chapter_meta = {}
+        style_fatigue_entries = self._normalize_style_fatigue_entries(result.get("style_fatigue"))
+        if style_fatigue_entries:
+            chapter_meta = dict(chapter_meta)
+            chapter_meta["style_fatigue"] = style_fatigue_entries
+            result["chapter_meta"] = chapter_meta
+
+        if not state_change_ok:
+            chapter_meta["progress_flags"] = ["insufficient_state_change"]
+            chapter_meta["progress_warnings"] = [
+                f"本章仅提取到 {state_change_count} 条状态变化，低于最低要求 {state_change_required}。",
+                "建议在动作/结果/代价中补充可追踪变化（关系/资源/认知/位置/战力）。",
+            ]
+            warnings.append(
+                f"推进不足: Chapter {chapter} 状态变化 {state_change_count} < 要求 {state_change_required}，建议补写推进段后重试。"
+            )
+
+        if chapter_meta:
             meta_key = f"{int(chapter):04d}"
             self._state.setdefault("chapter_meta", {})
             self._state["chapter_meta"][meta_key] = chapter_meta

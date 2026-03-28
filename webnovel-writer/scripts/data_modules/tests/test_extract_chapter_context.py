@@ -42,15 +42,19 @@ def test_extract_chapter_outline_supports_hyphen_filename(tmp_path):
     if str(scripts_dir) not in sys.path:
         sys.path.insert(0, str(scripts_dir))
 
-    from extract_chapter_context import extract_chapter_outline
+    from extract_chapter_context import extract_chapter_outline, ensure_chapter_outline_exists
 
     outline_dir = tmp_path / "大纲"
     outline_dir.mkdir(parents=True, exist_ok=True)
-    (outline_dir / "第1卷-详细大纲.md").write_text("### 第1章：测试标题\n测试大纲", encoding="utf-8")
+    (outline_dir / "第1卷-详细大纲.md").write_text(
+        "### 第1章：测试标题\n目标：确认线索\n冲突：遭遇阻力\n动作：前往调查\n结果：得到线索\n代价：被盯上\n钩子：更大危机",
+        encoding="utf-8",
+    )
 
     outline = extract_chapter_outline(tmp_path, 1)
     assert "### 第1章：测试标题" in outline
-    assert "测试大纲" in outline
+    assert "测试标题" in outline
+    ensure_chapter_outline_exists(tmp_path, 1)
 
 
 def test_extract_chapter_outline_prefers_state_volume_mapping(tmp_path):
@@ -95,11 +99,61 @@ def test_extract_chapter_outline_falls_back_when_state_has_no_match(tmp_path):
 
     outline_dir = tmp_path / "大纲"
     outline_dir.mkdir(parents=True, exist_ok=True)
-    (outline_dir / "第2卷-详细大纲.md").write_text("### 第60章：V2标题\nV2大纲", encoding="utf-8")
+    (outline_dir / "第2卷-详细大纲.md").write_text(
+        "### 第60章：V2标题\n目标：调查异动\n冲突：巡逻阻拦\n动作：绕路潜入\n结果：发现痕迹\n代价：受伤\n钩子：幕后现身",
+        encoding="utf-8",
+    )
 
     outline = extract_chapter_outline(tmp_path, 60)
     assert "### 第60章：V2标题" in outline
-    assert "V2大纲" in outline
+    assert "V2标题" in outline
+
+
+def test_ensure_chapter_outline_exists_raises_when_missing(tmp_path):
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    import pytest
+    from extract_chapter_context import ensure_chapter_outline_exists
+
+    with pytest.raises(ValueError, match="缺少可用大纲"):
+        ensure_chapter_outline_exists(tmp_path, 1, "⚠️ 未找到第 1 章的大纲")
+
+
+def test_ensure_chapter_outline_exists_requires_contract_fields(tmp_path):
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    import pytest
+    from extract_chapter_context import ensure_chapter_outline_exists
+
+    outline_dir = tmp_path / "大纲"
+    outline_dir.mkdir(parents=True, exist_ok=True)
+    (outline_dir / "第1卷-详细大纲.md").write_text("### 第1章：测试标题\n只有一句描述", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="缺少关键项"):
+        ensure_chapter_outline_exists(tmp_path, 1, require_contract=True)
+
+
+def test_ensure_chapter_outline_exists_requires_state_change_when_configured(tmp_path):
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    import pytest
+    from extract_chapter_context import ensure_chapter_outline_exists
+
+    outline_dir = tmp_path / "大纲"
+    outline_dir.mkdir(parents=True, exist_ok=True)
+    (outline_dir / "第1卷-详细大纲.md").write_text(
+        "### 第1章：测试标题\n目标：查案\n冲突：阻力\n动作：调查\n结果：得到情报\n代价：疲惫\n钩子：未知来信",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="状态变化"):
+        ensure_chapter_outline_exists(tmp_path, 1, require_contract=True, min_state_changes=1)
 
 
 def test_build_chapter_context_payload_includes_contract_sections(tmp_path):
@@ -166,7 +220,10 @@ def test_build_chapter_context_payload_includes_contract_sections(tmp_path):
 
     outline_dir = tmp_path / "大纲"
     outline_dir.mkdir(parents=True, exist_ok=True)
-    (outline_dir / "第1卷 详细大纲.md").write_text("### 第3章：测试标题\n测试大纲", encoding="utf-8")
+    (outline_dir / "第1卷 详细大纲.md").write_text(
+        "### 第3章：测试标题\n目标：拉回主线\n冲突：旧敌阻拦\n动作：潜入调查\n结果：拿到证据并突破\n代价：暴露行踪\n钩子：幕后黑手现身",
+        encoding="utf-8",
+    )
 
     refs_dir = tmp_path / ".claude" / "references"
     refs_dir.mkdir(parents=True, exist_ok=True)

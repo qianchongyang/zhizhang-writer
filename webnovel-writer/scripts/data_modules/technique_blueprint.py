@@ -325,6 +325,19 @@ def build_story_technique_blueprint(
             "连续三章同构钩子或同构爽点",
             "没有余波的高光/打脸",
         ],
+        "anti_ai_style": {
+            "sentence_length_variance": "high",
+            "short_sentence_ratio_target": 0.30,
+            "colloquial_ratio_target": 0.15,
+            "incomplete_sentence_ratio_target": 0.08,
+            "pause_word_density_target": 1.5,
+            "causal_connector_limit": 1,
+            "banned_connectors": ["首先", "其次", "最后", "因此", "然而", "所以", "由于", "从而", "于是"],
+            "banned_patterns_list": [
+                "三段式枚举", "连续同构句", "说明书式对白",
+                "总结归纳词", "环境套话", "动作套话",
+            ],
+        },
         "memory_bias": {
             "effective_techniques": list(summary.get("effective") or [])[:6],
             "fatigue_techniques": list(summary.get("fatigue") or [])[:6],

@@ -20,7 +20,11 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-from chapter_outline_loader import load_chapter_outline
+from chapter_outline_loader import (
+    is_missing_chapter_outline,
+    load_chapter_outline,
+    validate_chapter_contract,
+)
 
 from runtime_compat import enable_windows_utf8_stdio
 
@@ -66,6 +70,54 @@ def find_project_root(start_path: Path | None = None) -> Path:
 def extract_chapter_outline(project_root: Path, chapter_num: int) -> str:
     """Extract chapter outline segment from volume outline file."""
     return load_chapter_outline(project_root, chapter_num, max_chars=1500)
+
+
+def ensure_chapter_outline_exists(
+    project_root: Path,
+    chapter_num: int,
+    outline: str | None = None,
+    require_contract: bool = True,
+    min_state_changes: int = 0,
+) -> str:
+    """Hard gate: chapter outline must exist and be actionable."""
+    resolved = outline if outline is not None else extract_chapter_outline(project_root, chapter_num)
+    if is_missing_chapter_outline(resolved):
+        raise ValueError(
+            f"第{chapter_num}章缺少可用大纲。请先在`大纲/`中补充对应章节大纲后再执行 /webnovel-write。"
+        )
+    if require_contract:
+        missing = validate_chapter_contract(resolved, min_state_changes=min_state_changes)
+        if missing:
+            missing_text = "、".join(missing)
+            raise ValueError(
+                f"第{chapter_num}章大纲缺少关键项：{missing_text}。"
+                "请补齐‘目标/冲突/动作/结果/代价/钩子’，并至少包含可识别的状态变化。"
+            )
+    return resolved
+
+
+def _friendly_context_error(error: Exception) -> str:
+    message = str(error)
+    hints = ["请先执行 preflight 或 where，确认 project_root 解析正确。"]
+
+    if "缺少可用大纲" in message:
+        hints = [
+            "在 `大纲/` 下补齐目标章节（卷纲切片或独立章节纲均可）。",
+            "可先运行 `webnovel.py extract-context --chapter N` 复检是否通过。",
+        ]
+    elif "缺少关键项" in message or "最小章节契约" in message:
+        hints = [
+            "在章纲中补齐：目标/冲突/动作/结果/代价/钩子。",
+            "建议使用 `字段: 内容` 的结构化写法，便于自动解析。",
+        ]
+    elif "状态变化" in message:
+        hints = [
+            "在动作/结果/代价中补充可追踪变化，如：突破/失去/结盟/暴露/受伤/离开。",
+            "若项目尚在早期试写，可临时下调 `context_min_state_changes_per_chapter`。",
+        ]
+
+    bullet = "\n".join(f"- {item}" for item in hints)
+    return f"{message}\n修复建议：\n{bullet}"
 
 
 def _load_summary_file(project_root: Path, chapter_num: int) -> str:
@@ -324,7 +376,16 @@ def _load_contract_context(project_root: Path, chapter_num: int) -> Dict[str, An
 
 def build_chapter_context_payload(project_root: Path, chapter_num: int) -> Dict[str, Any]:
     """Assemble full chapter context payload for text/json output."""
-    outline = extract_chapter_outline(project_root, chapter_num)
+    _ensure_scripts_path()
+    from data_modules.config import DataModulesConfig
+
+    config = DataModulesConfig.from_project_root(project_root)
+    outline = ensure_chapter_outline_exists(
+        project_root,
+        chapter_num,
+        require_contract=bool(getattr(config, "context_require_chapter_contract", True)),
+        min_state_changes=max(0, int(getattr(config, "context_min_state_changes_per_chapter", 0))),
+    )
 
     prev_summaries = []
     for prev_ch in range(max(1, chapter_num - 2), chapter_num):
@@ -822,7 +883,7 @@ def main():
             print(_render_text(payload), end="")
 
     except Exception as exc:
-        print(f"❌ 错误: {exc}", file=sys.stderr)
+        print(f"❌ 错误: {_friendly_context_error(exc)}", file=sys.stderr)
         sys.exit(1)
 
 

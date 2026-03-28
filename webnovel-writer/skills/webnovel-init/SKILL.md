@@ -407,6 +407,9 @@ python "${SCRIPTS_DIR}/webnovel.py" init \
 
 ```bash
 test -f "{project_root}/.webnovel/state.json"
+test -f "{project_root}/.webnovel/story_technique_blueprint.json"
+test -f "{project_root}/.webnovel/project_memory.json"
+test -d "{project_root}/.webnovel/control/chapter_technique_plans"
 find "{project_root}/设定集" -maxdepth 1 -type f -name "*.md"
 test -f "{project_root}/大纲/总纲.md"
 test -f "{project_root}/.webnovel/idea_bank.json"
@@ -414,6 +417,9 @@ test -f "{project_root}/.webnovel/idea_bank.json"
 
 成功标准：
 - `state.json` 存在且关键字段不为空（title/genre/target_words/target_chapters）。
+- `story_technique_blueprint.json` 存在且包含 `genre_strategy` 字段（v5.19 题材技巧蓝图）。
+- `project_memory.json` 存在且包含 `technique_summary` 字段（v5.19 技巧记忆）。
+- `control/chapter_technique_plans/` 目录存在（v5.19 章节技巧计划缓存）。
 - 设定集核心文件存在：`世界观.md`、`力量体系.md`、`主角卡.md`、`金手指设计.md`。
 - `总纲.md` 已填核心主线与约束字段。
 - `idea_bank.json` 已写入且与最终选定方案一致。

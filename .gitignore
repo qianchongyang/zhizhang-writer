@@ -55,7 +55,9 @@ claude_inventory.csv
 *_utf8_sample.txt
 
 # Local personal notes and communication records (do NOT commit)
-docs/notes/沟通记录/
+docs/notes/
+docs/plans/
 docs/superpowers/
+docs/沟通记录/
 docs/个人/
 docs/.private/

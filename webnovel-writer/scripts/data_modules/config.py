@@ -328,6 +328,14 @@ class DataModulesConfig:
     snapshot_retention_chapters: int = 100         # 快照保留章数
     consistency_repair_auto: bool = False         # 是否自动修复一致性
 
+    # ================= v5.24 经营化版 =================
+    reader_feedback_enabled: bool = True
+    reader_feedback_dir: str = "reader_feedback"
+    reader_feedback_default_template: str = "daily"
+    reader_pull_check_interval: int = 10
+    reader_pull_warning_threshold: float = 0.6
+    reader_pull_critical_threshold: float = 0.4
+
     # ================= Style Fatigue =================
     style_fatigue_warn_threshold: int = 3
     style_fatigue_notice_threshold: int = 1

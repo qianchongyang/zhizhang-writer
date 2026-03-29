@@ -120,7 +120,7 @@ allowed-tools: Read Write Edit Grep Bash Task
 - 规范化变量：
   - `WORKSPACE_ROOT`：Claude Code 打开的工作区根目录（可能是书项目的父目录，例如 `D:\wk\xiaoshuo`）
   - `PROJECT_ROOT`：真实书项目根目录（必须包含 `.webnovel/state.json`，例如 `D:\wk\xiaoshuo\凡人资本论`）
-  - `CLAUDE_PLUGIN_ROOT`：优先使用 Claude Code 注入的插件根目录；未注入时需要手动显式设置为本机安装的插件根目录
+  - `CLAUDE_PLUGIN_ROOT`：优先使用 Claude Code 注入的插件根目录；若未注入，则回退到 `$HOME/.claude/plugins/marketplaces/webnovel-writer-marketplace/webnovel-writer`
   - `SKILL_ROOT`：skill 所在目录（由 `CLAUDE_PLUGIN_ROOT` 解析）
   - `SCRIPTS_DIR`：脚本目录（由 `CLAUDE_PLUGIN_ROOT` 解析）
   - `chapter_num`：当前章号（整数）
@@ -130,11 +130,22 @@ allowed-tools: Read Write Edit Grep Bash Task
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
-  echo "无法定位织章插件根目录：请在 Claude Code 中运行，或先显式设置 CLAUDE_PLUGIN_ROOT" >&2
-  exit 1
+  export CLAUDE_PLUGIN_ROOT="${HOME}/.claude/plugins/marketplaces/webnovel-writer-marketplace/webnovel-writer"
 fi
 if [ ! -x "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" ]; then
-  echo "CLAUDE_PLUGIN_ROOT 无效：未找到 scripts/webnovel.py" >&2
+  for candidate in \
+    "${CLAUDE_PLUGIN_ROOT}" \
+    "${CLAUDE_PROJECT_DIR:-$PWD}/webnovel-writer" \
+    "${CLAUDE_PROJECT_DIR:-$PWD}/webnovel-writer/webnovel-writer"
+  do
+    if [ -n "$candidate" ] && [ -x "$candidate/scripts/webnovel.py" ]; then
+      export CLAUDE_PLUGIN_ROOT="$candidate"
+      break
+    fi
+  done
+fi
+if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ] || [ ! -x "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" ]; then
+  echo "无法定位织章插件根目录：请在 Claude Code 中运行，或显式设置 CLAUDE_PLUGIN_ROOT 为插件根目录" >&2
   exit 1
 fi
 export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"

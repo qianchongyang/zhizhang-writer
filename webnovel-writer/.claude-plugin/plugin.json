@@ -1,6 +1,6 @@
 {
   "name": "zhizhang-writer",
-  "version": "5.24.0",
+  "version": "5.24.1",
   "description": "织章：长篇网文创作系统（skills + agents + data chain + RAG）",
   "author": {
     "name": "qianchongyang"

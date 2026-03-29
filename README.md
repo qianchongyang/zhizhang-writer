@@ -137,6 +137,7 @@ claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 
 最近几个版本的方向：
 
+- `2026-03-29`：补齐章节闭环修复、skill 启动兼容与可移植路径，面向新会话/新项目可直接使用
 - `2026-03-29`：首页改成 Claude 优先入口，增加快速索引和更细的更新日志规范
 - `v5.24.0`：新增读者反馈与追读力建议模块
 - `v5.23.0`：新增健康检查与一致性修复

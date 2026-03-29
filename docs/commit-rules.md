@@ -15,6 +15,7 @@
 - 混合工作区时，不要无脑 `git add -A`
 - 不确定是否该提交时，先 `git status` 再拆分
 - 本地工作台文件、密钥、聊天记录、草稿默认不进仓库
+- 过程文档默认放在 `docs/private/`，不要放回公开的 `docs/notes/` 或 `docs/plans/`
 
 ## 3. 提交信息规则
 
@@ -36,7 +37,8 @@
 - README 里的 Claude 安装路径优先、文档索引清楚
 - 插件元数据和 marketplace 元数据一致
 - 没有把 `.env`、`*.key`、`*.pem`、`credentials.json` 提交进去
-- `docs/notes/沟通记录/` 之类的内部内容没有进入公开入口
+- `docs/private/沟通记录/` 之类的内部内容没有进入公开入口
+- `docs/private/` 里的过程文档没有进入公开入口
 - 新命令 `zhizhang-*` 与旧命令 `webnovel-*` 的兼容说明已经写清楚
 - 变更日志 `docs/CHANGELOG.md` 已经补上对应条目
 

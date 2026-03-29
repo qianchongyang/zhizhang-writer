@@ -131,13 +131,9 @@ claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 - 内部讨论草稿
 - 未整理的临时分析文件
 
-建议把这些内容统一放到 `.gitignore` 已忽略目录中，例如：
+建议把这些内容统一放到 `.gitignore` 已忽略目录中的 `docs/private/`，例如：
 
-- `docs/notes/`
-- `docs/plans/`
 - `docs/private/`
-- `docs/沟通记录/`
-- `docs/个人/`
 
 ---
 

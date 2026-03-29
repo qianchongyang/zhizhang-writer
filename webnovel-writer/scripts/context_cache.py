@@ -69,7 +69,10 @@ class ContextCache:
                 config = get_config()
             self.cache_dir = config.webnovel_dir / self.CACHE_DIR
         else:
-            from project_locator import resolve_project_root
+            try:
+                from project_locator import resolve_project_root
+            except ImportError:
+                from scripts.project_locator import resolve_project_root
             root = resolve_project_root()
             self.cache_dir = root / ".webnovel" / self.CACHE_DIR
 

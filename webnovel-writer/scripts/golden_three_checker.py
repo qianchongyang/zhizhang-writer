@@ -27,12 +27,21 @@ import json
 import argparse
 from pathlib import Path
 
-from runtime_compat import enable_windows_utf8_stdio
+try:
+    from runtime_compat import enable_windows_utf8_stdio
+except ImportError:
+    from scripts.runtime_compat import enable_windows_utf8_stdio
 from typing import Dict, List, Optional, Any
 
 # 导入项目定位和章节路径模块
-from project_locator import resolve_project_root
-from chapter_paths import find_chapter_file
+try:
+    from project_locator import resolve_project_root
+except ImportError:
+    from scripts.project_locator import resolve_project_root
+try:
+    from chapter_paths import find_chapter_file
+except ImportError:
+    from scripts.chapter_paths import find_chapter_file
 
 # Windows UTF-8 输出修复
 if sys.platform == "win32":

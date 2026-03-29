@@ -18,7 +18,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, Optional
 
-from runtime_compat import normalize_windows_path
+try:
+    from runtime_compat import normalize_windows_path
+except ImportError:
+    from scripts.runtime_compat import normalize_windows_path
 
 
 DEFAULT_PROJECT_DIR_NAMES: tuple[str, ...] = ("webnovel-project",)

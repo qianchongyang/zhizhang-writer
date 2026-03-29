@@ -53,15 +53,24 @@ import sys
 import shutil
 from pathlib import Path
 
-from runtime_compat import enable_windows_utf8_stdio
+try:
+    from runtime_compat import enable_windows_utf8_stdio
+except ImportError:
+    from scripts.runtime_compat import enable_windows_utf8_stdio
 from datetime import datetime
 from typing import Optional, List, Tuple
 
 # ============================================================================
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
-from security_utils import sanitize_commit_message, is_git_available, is_git_repo, git_graceful_operation
-from project_locator import resolve_project_root
+try:
+    from security_utils import sanitize_commit_message, is_git_available, is_git_repo, git_graceful_operation
+except ImportError:
+    from scripts.security_utils import sanitize_commit_message, is_git_available, is_git_repo, git_graceful_operation
+try:
+    from project_locator import resolve_project_root
+except ImportError:
+    from scripts.project_locator import resolve_project_root
 
 # Windows 编码兼容性修复
 if sys.platform == "win32":

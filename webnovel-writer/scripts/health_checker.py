@@ -459,7 +459,10 @@ def main():
     if args.project_root:
         project_root = args.project_root
     else:
-        from project_locator import resolve_project_root
+        try:
+            from project_locator import resolve_project_root
+        except ImportError:
+            from scripts.project_locator import resolve_project_root
         project_root = str(resolve_project_root())
 
     checker = HealthChecker(project_root)

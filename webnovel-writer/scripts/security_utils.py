@@ -15,7 +15,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-from runtime_compat import enable_windows_utf8_stdio
+try:
+    from runtime_compat import enable_windows_utf8_stdio
+except ImportError:
+    from scripts.runtime_compat import enable_windows_utf8_stdio
 from typing import Any, Dict, Optional, Union
 
 # 尝试导入 filelock（可选依赖）
@@ -170,28 +173,6 @@ def create_secure_directory(path: str, mode: int = 0o700) -> Path:
         os.chmod(path, mode)
 
     return path_obj
-
-
-def create_secure_file(file_path: str, content: str, mode: int = 0o600) -> None:
-    """
-    创建安全文件（仅所有者可读写）
-
-    Args:
-        file_path: 文件路径
-        content: 文件内容
-        mode: 权限模式（默认0o600，仅所有者可读写）
-
-    安全验证:
-        - ✅ 仅所有者可读写（0o600）
-        - ✅ 防止其他用户访问
-    """
-    # 创建文件
-    with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(content)
-
-    # 设置权限（仅Unix系统）
-    if os.name != 'nt':
-        os.chmod(file_path, mode)
 
 
 def validate_integer_input(value: str, field_name: str) -> int:

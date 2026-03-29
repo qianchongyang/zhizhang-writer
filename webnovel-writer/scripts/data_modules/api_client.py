@@ -13,12 +13,12 @@ Data Modules - API 客户端 (v5.4，v5.0 OpenAI 兼容接口沿用)
     embed_api_type = "openai"
     embed_base_url = "https://api.openai.com/v1"
     embed_model = "text-embedding-3-small"
-    embed_api_key = "sk-xxx"
+    embed_api_key = "<YOUR_API_KEY>"
 
     rerank_api_type = "openai"  # Jina/Cohere 也使用此类型
     rerank_base_url = "https://api.jina.ai/v1"
     rerank_model = "jina-reranker-v2-base-multilingual"
-    rerank_api_key = "jina_xxx"
+    rerank_api_key = "<YOUR_RERANK_KEY>"
 """
 
 import asyncio

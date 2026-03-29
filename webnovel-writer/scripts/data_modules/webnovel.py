@@ -30,7 +30,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from runtime_compat import normalize_windows_path
+from .runtime_compat import normalize_windows_path
 from project_locator import resolve_project_root, write_current_project_pointer, update_global_registry_current_project
 
 

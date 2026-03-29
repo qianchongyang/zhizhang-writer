@@ -88,7 +88,7 @@ class InteractiveMenu:
         try:
             from project_locator import resolve_project_root
             return str(resolve_project_root())
-        except:
+        except Exception:
             return os.getcwd()
 
     def _run_cli(self, command: list[str], capture: bool = True) -> str:

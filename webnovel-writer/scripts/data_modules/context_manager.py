@@ -11,7 +11,7 @@ import sys
 import logging
 from pathlib import Path
 
-from runtime_compat import enable_windows_utf8_stdio
+from .runtime_compat import enable_windows_utf8_stdio
 from typing import Any, Dict, List, Optional
 
 try:

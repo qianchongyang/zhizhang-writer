@@ -13,7 +13,7 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
-from runtime_compat import normalize_windows_path
+from .runtime_compat import normalize_windows_path
 
 from .context_weights import TEMPLATE_WEIGHTS_DYNAMIC_DEFAULT
 

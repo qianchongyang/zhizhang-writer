@@ -6,11 +6,13 @@
 
 1. [README.md](../README.md)
 2. [新手 / 进阶 / 高级与开源协作指南](open-source-guide.md)
-3. [架构与模块](architecture.md)
-4. [命令详解](commands.md)
-5. [RAG 与配置](rag-and-config.md)
-6. [题材模板](genres.md)
-7. [运维与恢复](operations.md)
+3. [文档公开边界](open-source-policy.md)
+4. [提交代码规则](commit-rules.md)
+5. [架构与模块](architecture.md)
+6. [命令详解](commands.md)
+7. [RAG 与配置](rag-and-config.md)
+8. [题材模板](genres.md)
+9. [运维与恢复](operations.md)
 
 ## 新手
 
@@ -27,6 +29,8 @@
 ## 高级
 
 - `open-source-guide.md`：二次开发、PR 规范、仓库协作建议
+- `open-source-policy.md`：哪些文档适合公开，哪些保持内部
+- `commit-rules.md`：本地提交、分支、验证和 PR 合并后操作规则
 - `architecture.md`：控制面 / 真相层 / 运行层
 - `commands.md`：批量写作、审查、恢复、数据回写
 

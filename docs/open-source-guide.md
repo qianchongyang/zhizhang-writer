@@ -110,6 +110,10 @@ claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 - `SECURITY.md`
 - `.github/pull_request_template.md`
 
+如果你想让本地提交和发布流程更统一，再补一份：
+
+- `docs/commit-rules.md`
+
 这三份文件能显著减少低质量 PR 和沟通成本。
 
 ---

@@ -63,3 +63,25 @@ def test_config_dynamic_template_weights_are_independent_instances(tmp_path):
     cfg1.context_template_weights_dynamic["early"]["plot"]["core"] = 0.77
 
     assert cfg2.context_template_weights_dynamic["early"]["plot"]["core"] != 0.77
+
+
+def test_default_window_size_override_from_project_config(tmp_path):
+    """项目配置文件中的 default_window_size 应覆盖默认值"""
+    import json
+    # 创建项目配置文件
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir()
+    project_config = webnovel_dir / "project_config.json"
+    project_config.write_text(json.dumps({"default_window_size": 30}), encoding="utf-8")
+
+    config = DataModulesConfig.from_project_root(tmp_path)
+    assert config.default_window_size == 30
+
+
+def test_default_window_size_no_override(tmp_path):
+    """无项目配置文件时使用默认值 25"""
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir()
+
+    config = DataModulesConfig.from_project_root(tmp_path)
+    assert config.default_window_size == 25

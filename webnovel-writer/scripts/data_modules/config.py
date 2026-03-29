@@ -166,7 +166,7 @@ class DataModulesConfig:
         return self.webnovel_dir / "outline_adjustments.jsonl"
 
     # ================= 动态大纲窗口配置 =================
-    default_window_size: int = 25  # 新项目默认活动窗口大小（章数）
+    default_window_size: int = field(default=25)  # 新项目默认活动窗口大小（章数）
 
     # ================= Embedding API 配置 =================
     embed_api_type: str = "openai"
@@ -434,7 +434,27 @@ class DataModulesConfig:
         root = normalize_windows_path(project_root).expanduser().resolve()
         # 在构造配置前加载项目级 `.env`，以确保 EMBED_*/RERANK_* 等字段可生效
         _load_project_dotenv(root)
-        return cls(project_root=root)
+
+        # 从项目配置文件读取 default_window_size 覆盖
+        window_size_override = cls._load_window_size_override(root)
+
+        config = cls(project_root=root)
+        if window_size_override is not None:
+            config.default_window_size = window_size_override
+        return config
+
+    @classmethod
+    def _load_window_size_override(cls, root: Path) -> Optional[int]:
+        """从 .webnovel/project_config.json 读取窗口大小覆盖"""
+        config_file = root / ".webnovel" / "project_config.json"
+        if config_file.exists():
+            try:
+                import json
+                data = json.loads(config_file.read_text(encoding="utf-8"))
+                return data.get("default_window_size")
+            except (json.JSONDecodeError, OSError):
+                pass
+        return None
 
 
 _default_config: Optional[DataModulesConfig] = None

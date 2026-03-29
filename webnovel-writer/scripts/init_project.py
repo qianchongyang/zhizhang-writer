@@ -722,7 +722,9 @@ def init_project(
     )
 
     # 动态大纲运行层初始化
-    ensure_outline_runtime(project_path, default_window_size=25)
+    from data_modules.config import get_config
+    config = get_config(project_path)
+    ensure_outline_runtime(project_path, default_window_size=config.default_window_size)
 
     # Git 初始化（仅当项目目录内尚无 .git 且 Git 可用）
     git_dir = project_path / ".git"

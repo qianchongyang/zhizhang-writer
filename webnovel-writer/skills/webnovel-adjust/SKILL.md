@@ -1,11 +1,21 @@
 ---
 name: webnovel-adjust
-description: 动态调整大纲（修改章节内容、插入副本、修正冲突）。当用户发现大纲有问题或需要插入新情节时使用。
+description: 动态大纲调试与人工覆盖（极端修复）。不推荐作为常规写作路径，优先由 /zhizhang-write 内嵌流程处理。
 ---
 
-# Dynamic Outline Adjustment
+# Dynamic Outline Adjustment（调试 / 极端修复模式）
 
-Purpose: 动态调整已有大纲，解决冲突、插入副本、增强章节。
+## 定位声明
+
+`/webnovel-adjust` 不是常规写作入口。
+
+**常规路径**：`/zhizhang-write` 已内嵌动态大纲能力（Context Agent 构建任务书时自动校验大纲约束）。只有在以下极端情况下才需要手动调用本 skill：
+
+- 调试：大纲存在逻辑错误，需要人工定位根因
+- 人工覆盖：系统自动处理无法满足的例外情况
+- 极端修复：数据损坏、状态丢失等需要绕过正常流程的紧急处理
+
+**正常写作循环**：`/zhizhang-write` → 审查反馈 → `/zhizhang-write` 下一章，不需要经过本 skill。
 
 ## Project Root Guard
 - 必须先解析 `PROJECT_ROOT` 为真实书项目根（必须包含 `.webnovel/state.json`）
@@ -215,3 +225,14 @@ cp "$PROJECT_ROOT/大纲/第{volume_id}卷-详细大纲.md" \
 
 后续章节无需调整。
 ```
+
+## 内嵌行为说明
+
+动态大纲能力已内嵌于 `/zhizhang-write` 主流程：
+
+- Context Agent 在构建任务书时自动校验大纲约束（目标/冲突/承接/角色/场景约束/伏笔/追读力）
+- 审查阶段（Step 3）检测到"关系跳跃"或"节奏太快"时，自动生成铺垫章节建议
+- Data Agent 自动追踪大纲与实际正文的偏差，必要时在 state.json 中记录待修复项
+
+因此，常规写作不需要手动调用本 skill，只在系统无法自动处理时才作为人工兜底手段。
+

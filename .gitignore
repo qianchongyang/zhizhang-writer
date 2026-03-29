@@ -57,6 +57,10 @@ _v52_*.txt
 claude_inventory.csv
 *_utf8_sample.txt
 
+# Worktrees
+.worktrees/
+worktrees/
+
 # Local personal notes and communication records (do NOT commit)
 docs/notes/
 docs/plans/

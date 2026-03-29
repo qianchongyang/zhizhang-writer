@@ -456,3 +456,160 @@ def test_render_text_contains_rag_assist_section_when_hits_exist(tmp_path):
     assert "- 模式: auto" in text
     assert "[graph_hybrid]" in text
     assert "萧炎与药老" in text
+
+
+# ============================================================
+# Task 0: 动态大纲基线测量 - 场景覆盖测试
+# ============================================================
+
+
+def test_load_chapter_outline_returns_warning_when_chapter_not_in_volume_outline(tmp_path):
+    """
+    场景: 无独立章纲，但卷详细大纲中不存在当前章条目
+    预期行为: load_chapter_outline() 返回警告字符串 "⚠️ 未找到第 X 章的大纲"
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    from extract_chapter_context import extract_chapter_outline
+
+    # 准备卷详细大纲，但只包含第1-5章，第10章不存在
+    outline_dir = tmp_path / "大纲"
+    outline_dir.mkdir(parents=True, exist_ok=True)
+    (outline_dir / "第1卷-详细大纲.md").write_text(
+        "### 第1章：开篇\n目标：介绍主角\n冲突：困境\n动作：觉醒\n结果：获得能力\n代价：失去记忆\n钩子：身份之谜\n\n### 第3章：发展\n目标：推进情节\n冲突：遭遇敌人\n动作：战斗\n结果：险胜\n代价：受伤\n钩子：更大威胁\n",
+        encoding="utf-8",
+    )
+
+    # 尝试获取第10章的大纲（卷纲中不存在）
+    outline = extract_chapter_outline(tmp_path, 10)
+
+    # 验证：返回警告字符串
+    assert "⚠️" in outline
+    assert "未找到第 10 章的大纲" in outline
+
+
+def test_load_chapter_outline_no_webnovel_dir_falls_back_to_default_volume(tmp_path):
+    """
+    场景: 运行层文件不存在（.webnovel/state.json 不存在）
+    预期行为: load_chapter_outline() 使用 chapter_paths 的默认卷章节映射回退
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    from extract_chapter_context import extract_chapter_outline
+
+    # 不创建 .webnovel 目录，直接准备卷大纲
+    outline_dir = tmp_path / "大纲"
+    outline_dir.mkdir(parents=True, exist_ok=True)
+    (outline_dir / "第1卷-详细大纲.md").write_text(
+        "### 第20章：测试章节\n目标：测试回退\n冲突：测试冲突\n动作：测试行动\n结果：测试结果\n代价：测试代价\n钩子：测试悬念",
+        encoding="utf-8",
+    )
+
+    # chapter_paths 默认映射第20章到第1卷
+    outline = extract_chapter_outline(tmp_path, 20)
+
+    # 验证：能从第1卷大纲中提取到第20章内容
+    assert "### 第20章：测试章节" in outline or "第20章" in outline
+
+
+def test_load_chapter_outline_no_outline_dir_at_all(tmp_path):
+    """
+    场景: 大纲目录完全不存在
+    预期行为: load_chapter_outline() 返回警告字符串 "⚠️ 大纲文件不存在"
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    from extract_chapter_context import extract_chapter_outline
+
+    # 不创建大纲目录
+    # tmp_path / "大纲" 不存在
+
+    outline = extract_chapter_outline(tmp_path, 1)
+
+    # 验证：返回大纲文件不存在的警告
+    assert "⚠️" in outline
+    assert "大纲文件不存在" in outline
+
+
+def test_ensure_chapter_outline_exists_raises_with_correct_message_for_missing_outline(tmp_path):
+    """
+    场景: context_require_chapter_outline=true (默认) 且大纲缺失
+    预期行为: ensure_chapter_outline_exists() 抛出 ValueError，消息包含 "缺少可用大纲"
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    import pytest
+    from extract_chapter_context import ensure_chapter_outline_exists
+
+    # 传入警告字符串（模拟 load_chapter_outline 返回的警告）
+    warning_outline = "⚠️ 大纲文件不存在：第 1 章"
+
+    with pytest.raises(ValueError) as exc_info:
+        ensure_chapter_outline_exists(tmp_path, 1, outline=warning_outline, require_contract=False)
+
+    # 验证错误消息内容
+    assert "缺少可用大纲" in str(exc_info.value)
+    assert "第1章" in str(exc_info.value)
+
+
+def test_ensure_chapter_outline_exists_raises_contract_error_when_fields_missing(tmp_path):
+    """
+    场景: 大纲存在但缺少章节契约关键字段
+    预期行为: ensure_chapter_outline_exists() 抛出 ValueError，消息包含 "缺少关键项"
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    import pytest
+    from extract_chapter_context import ensure_chapter_outline_exists
+
+    outline_dir = tmp_path / "大纲"
+    outline_dir.mkdir(parents=True, exist_ok=True)
+    # 契约字段不完整（缺少 "代价"、"钩子" 等字段）
+    (outline_dir / "第1卷-详细大纲.md").write_text(
+        "### 第1章：测试\n目标：测试目标\n冲突：测试冲突\n动作：测试行动\n结果：测试结果\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        ensure_chapter_outline_exists(tmp_path, 1, require_contract=True)
+
+    # 验证错误消息包含缺失字段
+    error_msg = str(exc_info.value)
+    assert "缺少关键项" in error_msg
+
+
+def test_ensure_chapter_outline_exists_raises_state_change_error_when_required(tmp_path):
+    """
+    场景: context_require_chapter_outline=true, require_contract=true, min_state_changes=1
+          但大纲中缺少可识别的状态变化关键词
+    预期行为: ensure_chapter_outline_exists() 抛出 ValueError，消息包含 "状态变化"
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    import pytest
+    from extract_chapter_context import ensure_chapter_outline_exists
+
+    outline_dir = tmp_path / "大纲"
+    outline_dir.mkdir(parents=True, exist_ok=True)
+    # 契约字段齐全，但缺少状态变化关键词
+    (outline_dir / "第1卷-详细大纲.md").write_text(
+        "### 第1章：无状态变化\n目标：原地等待\n冲突：无冲突\n动作：站着不动\n结果：什么都没发生\n代价：没有代价\n钩子：无悬念",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        ensure_chapter_outline_exists(tmp_path, 1, require_contract=True, min_state_changes=1)
+
+    assert "状态变化" in str(exc_info.value)

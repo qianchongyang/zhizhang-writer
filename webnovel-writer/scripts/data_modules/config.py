@@ -165,6 +165,9 @@ class DataModulesConfig:
     def outline_adjustments_file(self) -> Path:
         return self.webnovel_dir / "outline_adjustments.jsonl"
 
+    # ================= 动态大纲窗口配置 =================
+    default_window_size: int = 25  # 新项目默认活动窗口大小（章数）
+
     # ================= Embedding API 配置 =================
     embed_api_type: str = "openai"
     embed_base_url: str = field(default_factory=lambda: os.getenv("EMBED_BASE_URL", "https://api-inference.modelscope.cn/v1"))

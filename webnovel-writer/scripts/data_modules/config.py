@@ -156,6 +156,14 @@ class DataModulesConfig:
     def outline_dir(self) -> Path:
         return self.project_root / "大纲"
 
+    # ================= 动态大纲运行层路径 =================
+    @property
+    def outline_runtime_file(self) -> Path:
+        return self.webnovel_dir / "outline_runtime.json"
+
+    @property
+    def outline_adjustments_file(self) -> Path:
+        return self.webnovel_dir / "outline_adjustments.jsonl"
 
     # ================= Embedding API 配置 =================
     embed_api_type: str = "openai"

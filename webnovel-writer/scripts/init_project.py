@@ -34,6 +34,7 @@ from data_modules.technique_blueprint import (
     load_project_memory,
     save_project_memory,
 )
+from data_modules.outline_runtime import ensure_outline_runtime
 
 
 # Windows 编码兼容性修复
@@ -719,6 +720,9 @@ def init_project(
         project_memory=project_memory_payload,
         force=True,
     )
+
+    # 动态大纲运行层初始化
+    ensure_outline_runtime(project_path)
 
     # Git 初始化（仅当项目目录内尚无 .git 且 Git 可用）
     git_dir = project_path / ".git"

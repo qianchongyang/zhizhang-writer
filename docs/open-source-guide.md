@@ -9,9 +9,14 @@
 ### 第一步：安装插件
 
 ```bash
-claude plugin marketplace add <YOUR_GITHUB_USERNAME>/zhizhang-writer --scope user
+# 添加官方发布源
+claude plugin marketplace add qianchongyang/zhizhang-writer --scope user
+
+# 安装织章
 claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 ```
+
+你不需要先 clone 仓库，也不需要自己的 GitHub 账号。这里的 GitHub 只是公开发布源，和“开发者维护仓库”不是一回事。
 
 ### 第二步：初始化项目
 

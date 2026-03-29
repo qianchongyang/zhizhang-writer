@@ -133,32 +133,127 @@ def cmd_review_merge(args: argparse.Namespace) -> int:
     """合并两组审查结果"""
     import json
     from datetime import datetime
-    
+
+    def _as_float(value):
+        if isinstance(value, (int, float)):
+            return float(value)
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                return None
+        return None
+
+    def _dedupe_append(target, item):
+        key = json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
+        if key not in seen_issue_keys:
+            seen_issue_keys.add(key)
+            target.append(item)
+
+    def _extract_score(payload):
+        candidates = [
+            payload.get("overall_score"),
+            (payload.get("summary") or {}).get("overall_score") if isinstance(payload.get("summary"), dict) else None,
+            (payload.get("综合评分") or {}).get("overall_score") if isinstance(payload.get("综合评分"), dict) else None,
+            (payload.get("overall_assessment") or {}).get("overall_score") if isinstance(payload.get("overall_assessment"), dict) else None,
+            (payload.get("review_summary") or {}).get("overall_score") if isinstance(payload.get("review_summary"), dict) else None,
+        ]
+        for candidate in candidates:
+            score = _as_float(candidate)
+            if score is not None:
+                return score
+        return None
+
+    def _extract_severity_counts(payload):
+        sources = [
+            payload.get("severity_counts"),
+            (payload.get("summary") or {}),
+        ]
+        merged = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+        for source in sources:
+            if not isinstance(source, dict):
+                continue
+            if any(k in source for k in merged):
+                for key in merged:
+                    merged[key] += int(source.get(key, 0) or 0)
+                return merged
+            if {"严重违规", "轻微问题"} & set(source.keys()):
+                merged["high"] += int(source.get("严重违规", 0) or 0)
+                merged["low"] += int(source.get("轻微问题", 0) or 0)
+                return merged
+        return merged
+
+    def _extract_issues(payload):
+        issues = []
+        seen_local = set()
+
+        def _append(item):
+            key = json.dumps(item, ensure_ascii=False, sort_keys=True, default=str)
+            if key in seen_local:
+                return
+            seen_local.add(key)
+            issues.append(item)
+
+        if isinstance(payload.get("issues"), list):
+            for item in payload["issues"]:
+                _append(item)
+
+        for key, value in payload.items():
+            if not isinstance(value, dict):
+                continue
+            nested_issues = value.get("issues")
+            if isinstance(nested_issues, list):
+                for item in nested_issues:
+                    if isinstance(item, dict):
+                        enriched = dict(item)
+                        enriched.setdefault("checker", key)
+                        _append(enriched)
+                    else:
+                        _append({"checker": key, "message": str(item)})
+
+            if key == "balance_check" and isinstance(value.get("warnings"), list):
+                for item in value.get("warnings") or []:
+                    _append({"checker": key, "severity": "low", "message": str(item)})
+
+            if key == "overall_assessment" and isinstance(value.get("recommendations"), list):
+                for item in value.get("recommendations") or []:
+                    _append({"checker": key, "severity": "low", "message": str(item)})
+
+        return issues
+
+    def _extract_dimension_scores(payload):
+        dimension_scores = {}
+        for key in ("dimension_scores", "dimensions"):
+            value = payload.get(key)
+            if isinstance(value, dict):
+                dimension_scores.update(value)
+        return dimension_scores
+
     group1_path = Path(args.group1)
     group2_path = Path(args.group2)
     output_path = Path(args.output)
-    
+
     # 读取两个审查组的结果
     with open(group1_path) as f:
         group1 = json.load(f)
     with open(group2_path) as f:
         group2 = json.load(f)
-    
-    # 合并issues
+
+    # 合并 issues / severity / score，兼容不同审查器的输出结构
     merged_issues = []
-    merged_issues.extend(group1.get("issues", []))
-    merged_issues.extend(group2.get("issues", []))
-    
-    # 合并severity_counts
+    seen_issue_keys = set()
+    for item in _extract_issues(group1) + _extract_issues(group2):
+        _dedupe_append(merged_issues, item)
+
     merged_severity = {"critical": 0, "high": 0, "medium": 0, "low": 0}
     for g in [group1, group2]:
+        extracted = _extract_severity_counts(g)
         for k in merged_severity:
-            merged_severity[k] += g.get("severity_counts", {}).get(k, 0)
-    
-    # 合并dimension_scores
+            merged_severity[k] += int(extracted.get(k, 0) or 0)
+
     merged_dimensions = {}
     for g in [group1, group2]:
-        merged_dimensions.update(g.get("dimension_scores", {}))
+        merged_dimensions.update(_extract_dimension_scores(g))
 
     technique_summary = {
         "signals": {},
@@ -179,21 +274,34 @@ def cmd_review_merge(args: argparse.Namespace) -> int:
                 technique_summary["failed"].append(token_text)
         for key, value in (summary.get("signals") or {}).items():
             technique_summary["signals"][str(key)] = value
-    
-    # 计算加权overall_score
+
+    # 计算加权 overall_score：优先用可用分数，避免历史结构不一致导致 0 分
     total_issues = sum(merged_severity.values())
-    group1_score = group1.get("overall_score", 0)
-    group2_score = group2.get("overall_score", 0)
-    
+    score_candidates = []
+    for g in [group1, group2]:
+        score = _extract_score(g)
+        if score is not None:
+            score_candidates.append(score)
+
+    if score_candidates:
+        base_score = sum(score_candidates) / len(score_candidates)
+    else:
+        base_score = 0.0
+
     if total_issues > 0:
         # 基于问题严重程度调整分数
-        penalty = (merged_severity["critical"] * 10 + 
-                   merged_severity["high"] * 5 + 
-                   merged_severity["medium"] * 2)
-        overall_score = max(0, (group1_score + group2_score) / 2 - penalty / 10)
+        penalty = (
+            merged_severity["critical"] * 10
+            + merged_severity["high"] * 5
+            + merged_severity["medium"] * 2
+        )
+        if score_candidates:
+            overall_score = max(0.0, base_score - penalty / 10)
+        else:
+            overall_score = max(0.0, 100.0 - penalty)
     else:
-        overall_score = (group1_score + group2_score) / 2
-    
+        overall_score = base_score
+
     merged = {
         "version": "1.0",
         "chapter": group1.get("chapter", 0),

@@ -142,7 +142,7 @@ export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
   - 固定路径：`${CLAUDE_PLUGIN_ROOT}/scripts`
   - 入口脚本：`${SCRIPTS_DIR}/webnovel.py`
 - 建议先打印解析结果，避免写到错误目录：
-  - `python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where`
+  - `python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where`
 - 加载最小参考：
   - `references/system-data-flow.md`（用于校对 init 产物与 plan/write 输入链路）
   - `references/genre-tropes.md`
@@ -332,7 +332,7 @@ export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
 ### 1) 运行初始化脚本
 
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" init \
+python3 "${SCRIPTS_DIR}/webnovel.py" init \
   "{project_root}" \
   "{title}" \
   "{genre}" \

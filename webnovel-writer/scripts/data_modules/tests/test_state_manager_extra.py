@@ -259,6 +259,55 @@ def test_process_chapter_result_updates_story_memory(temp_project):
     assert story_memory["plot_threads"][0]["status"] == "已回收"
 
 
+def test_process_chapter_result_syncs_chapter_index(temp_project):
+    manager = StateManager(temp_project)
+
+    chapter_file = temp_project.project_root / "正文" / "第0013章.md"
+    chapter_file.parent.mkdir(parents=True, exist_ok=True)
+    chapter_file.write_text(
+        "# 第13章：师兄王铁的嘲讽\n\n"
+        "林根在晨曦里思考五行相生。\n"
+        "王铁当众嘲讽他。\n",
+        encoding="utf-8",
+    )
+
+    summary_dir = temp_project.webnovel_dir / "summaries"
+    summary_dir.mkdir(parents=True, exist_ok=True)
+    (summary_dir / "ch0013.md").write_text("## 摘要\n林根与王铁发生正面冲突。", encoding="utf-8")
+
+    result = {
+        "entities_appeared": [
+            {"id": "lin_gen", "type": "角色", "mentions": ["林根"], "confidence": 0.98},
+            {"id": "wang_tie", "type": "角色", "mentions": ["王铁"], "confidence": 0.97},
+        ],
+        "entities_new": [
+            {"suggested_id": "shimei", "name": "师妹", "type": "角色", "tier": "重要", "mentions": ["师妹"]}
+        ],
+        "state_changes": [
+            {"entity_id": "lin_gen", "field": "location", "old": "天道宗外门木屋", "new": "后山小亭", "reason": "赴约"}
+        ],
+        "chapter_meta": {
+            "hook": "王铁当众嘲讽",
+            "ending": {"location": "后山小亭"},
+        },
+    }
+
+    warnings = manager.process_chapter_result(13, result)
+    assert warnings == []
+
+    manager.save_state()
+
+    idx = IndexManager(temp_project)
+    chapter = idx.get_chapter(13)
+    assert chapter is not None
+    assert chapter["title"] == "师兄王铁的嘲讽"
+    assert chapter["location"] == "后山小亭"
+    assert chapter["word_count"] > 0
+    assert "lin_gen" in chapter["characters"]
+    assert "wang_tie" in chapter["characters"]
+    assert chapter["summary"].startswith("## 摘要")
+
+
 def test_process_chapter_result_updates_project_technique_memory(temp_project):
     manager = StateManager(temp_project, enable_sqlite_sync=False)
     manager._state["project_info"] = {"genre": "都市异能"}
@@ -271,6 +320,9 @@ def test_process_chapter_result_updates_project_technique_memory(temp_project):
             "coolpoint_patterns": ["身份掉马", "反派翻车"],
             "chapter_type": "confront",
         },
+        "state_changes": [
+            {"entity_id": "xiaoyan", "field": "realm", "old": "斗者", "new": "斗师", "reason": "突破"}
+        ],
         "review_summary": {"overall_score": 84},
         "technique_execution": {
             "signals": {

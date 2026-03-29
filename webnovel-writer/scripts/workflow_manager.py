@@ -788,13 +788,31 @@ def get_pending_steps(command):
     return []
 
 
+def _derive_task_artifacts(task: Dict[str, Any]) -> Dict[str, Any]:
+    """Derive stable artifact flags from completed workflow steps."""
+    artifacts = dict(task.get("artifacts") or {})
+    completed_ids = {str(step.get("id") or "") for step in task.get("completed_steps", []) if isinstance(step, dict)}
+
+    if "Step 3" in completed_ids:
+        artifacts["review_completed"] = True
+
+    if "Step 5" in completed_ids:
+        artifacts["state_json_modified"] = True
+        artifacts["entities_appeared"] = True
+
+    if "Step 6" in completed_ids and not artifacts.get("git_status"):
+        artifacts["git_status"] = {"completed": True}
+
+    return artifacts
+
+
 def extract_stable_state(task):
     """Extract stable state snapshot."""
     return {
         "command": task["command"],
         "chapter_num": task["args"].get("chapter_num"),
         "completed_at": task.get("completed_at"),
-        "artifacts": task.get("artifacts", {}),
+        "artifacts": _derive_task_artifacts(task),
         "workflow_trace": task.get("workflow_trace", {}),
     }
 

@@ -22,36 +22,28 @@
 
 ## Claude 安装与启动
 
-`织章` 的安装入口优先围绕 Claude Code 设计。你不需要先 clone 仓库，也不需要先有自己的 GitHub 仓库，只要在 Claude 里复制下面的命令即可。
+`织章` 的安装入口优先围绕 Claude Code 设计。你不需要先 clone 仓库，也不需要先有自己的 GitHub 仓库。
+
+**普通用户直接复制这两条：**
 
 ```bash
-# 1. 添加官方发布源
 claude plugin marketplace add qianchongyang/zhizhang-writer --scope user
-
-# 2. 安装织章
 claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
-
-# 3. 查看已安装插件
-claude plugin list
 ```
 
-如果你已经安装过旧版本，只需要更新：
-
-```bash
-claude plugin update zhizhang-writer@zhizhang-marketplace --scope user
-```
-
-仅当前项目生效时，把 `--scope user` 改成 `--scope project`。
-
-GitHub 在这里是“公开发布源”，不是使用前置门槛。你只要能运行 Claude Code，就能按上面的命令安装。
-
-安装完成后，先输入：
+安装完直接输入：
 
 ```bash
 /zhizhang-menu
 ```
 
-它会显示当前可用命令和入口。
+**进阶用户说明：**
+
+- 已安装过旧版本时，执行 `claude plugin update zhizhang-writer@zhizhang-marketplace --scope user`
+- 仅当前项目生效时，把 `--scope user` 改成 `--scope project`
+- GitHub 只是公开发布源，不是使用门槛
+
+`/zhizhang-menu` 会显示当前可用命令和入口。
 
 ## 3 步上手
 

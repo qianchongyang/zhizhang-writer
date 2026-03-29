@@ -8,15 +8,20 @@
 
 ### 第一步：安装插件
 
-```bash
-# 添加官方发布源
-claude plugin marketplace add qianchongyang/zhizhang-writer --scope user
+**普通用户直接复制这两条：**
 
-# 安装织章
+```bash
+claude plugin marketplace add qianchongyang/zhizhang-writer --scope user
 claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 ```
 
 你不需要先 clone 仓库，也不需要自己的 GitHub 账号。这里的 GitHub 只是公开发布源，和“开发者维护仓库”不是一回事。
+
+**进阶用户说明：**
+
+- 已安装过旧版本时，执行 `claude plugin update zhizhang-writer@zhizhang-marketplace --scope user`
+- 仅当前项目生效时，把 `--scope user` 改成 `--scope project`
+- `/zhizhang-menu` 可以直接查看当前可用命令和入口
 
 ### 第二步：初始化项目
 

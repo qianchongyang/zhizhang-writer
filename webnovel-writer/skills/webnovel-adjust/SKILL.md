@@ -78,16 +78,43 @@ cat "$PROJECT_ROOT/大纲/第{volume_id}卷-时间线.md"
 - 时间线变化
 - 需要更新的相关章节
 
-### Step 4: 执行调整
-1. 修改大纲文件
-2. 更新时间线
-3. 同步 state.json（如有变更）
-4. 记录调整历史
+### Step 4: 执行调整（使用 OutlineMutationEngine）
+使用大纲写回引擎执行原子化调整：
+
+```bash
+# 调用 mutation engine 执行调纲
+python "${SCRIPTS_DIR}/data_modules/outline_mutation_engine.py" \
+    --project-root "${PROJECT_ROOT}" \
+    --action-type "{minor_reorder|insert_arc|window_extend|manual_block}" \
+    --trigger-chapter {N} \
+    --reason "{调整原因}" \
+    --impact-preview "{影响预览}"
+```
+
+**支持的 4 种动作类型**：
+| 动作 | 说明 |
+|------|------|
+| `minor_reorder` | 小修：修改某章情节，不改变窗口 |
+| `insert_arc` | 中修：插入新章节/副本，可能扩展窗口 |
+| `window_extend` | 窗口扩展：扩大活动窗口范围 |
+| `manual_block` | 阻断标记：标记需要人工审核的区块 |
+
+**原子性保证**：
+1. 先生成完整 `adjustment_record`
+2. 先追加写入 `outline_adjustments.jsonl`（触发 window_version 增长）
+3. 计算新的 `outline_runtime.json` 内容
+4. 写入临时文件，原子替换
+5. 最后更新 Markdown 大纲与时间线文件
+
+**失败回滚**：
+- `outline_runtime.json` 更新失败：不继续写 Markdown
+- Markdown 写回失败：回滚 runtime，追加 rollback_reason="markdown_write_failed"
 
 ### Step 5: 验证
 - 检查调整后的大纲一致性
 - 检查时间线逻辑
 - 检查倒计时是否正确
+- 确认 `outline_runtime.json` 的 `window_version` 已增长
 
 ## 副本插入模板
 
@@ -175,13 +202,27 @@ cat "$PROJECT_ROOT/大纲/第{volume_id}卷-时间线.md"
 
 ## 大纲版本历史
 
-每次调整后，自动记录：
+每次调整后，自动记录到 `outline_adjustments.jsonl`：
 
-```bash
-# 备份当前大纲
-cp "$PROJECT_ROOT/大纲/第{volume_id}卷-详细大纲.md" \
-   "$PROJECT_ROOT/.webnovel/outline_history/第{volume_id}卷-详细大纲.v{version}.md"
+```json
+{
+  "adjustment_id": "uuid",
+  "trigger_chapter": 13,
+  "adjustment_type": "minor_reorder",
+  "reason": "修改第13章情节",
+  "impact_preview": "修改大纲内容，不影响窗口",
+  "before_window": {"start": 1, "end": 50, "version": 0},
+  "after_window": {"start": 1, "end": 50, "version": 1},
+  "written_at": "2026-03-29T10:00:00Z",
+  "mainline_service_reason": null,
+  "return_to_mainline_by": null
+}
 ```
+
+**版本增长规则**：
+- `window_version` 的增长由 JSONL 成功追加 `adjustment_id` 触发
+- 不由 runtime 文件写入触发
+- `outline_runtime.json.last_applied_adjustment_id` 必须指向最后一条 `status=applied` 的记录
 
 ## 示例对话
 

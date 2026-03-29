@@ -41,6 +41,7 @@ STEP_STATUS_STARTED = "started"
 STEP_STATUS_RUNNING = "running"
 STEP_STATUS_COMPLETED = "completed"
 STEP_STATUS_FAILED = "failed"
+STEP_STATUS_WARNING = "warning"
 
 
 def now_iso() -> str:
@@ -137,6 +138,8 @@ def expected_step_owner(command: str, step_id: str) -> str:
             "Step 3": "review-agents",
             "Step 4": "polish-agent",
             "Step 5": "data-agent",
+            "Step 5.5A": "data-agent",
+            "Step 5.5B": "data-agent",
             "Step 6": "backup-agent",
         }
         return mapping.get(step_id, "webnovel-write-skill")
@@ -587,8 +590,26 @@ def analyze_recovery_options(interrupt_info):
                 "label": "从 Step 5 重新开始",
                 "risk": "low",
                 "description": "重新运行 Data Agent（幂等）",
-                "actions": ["重新调用 Data Agent", "继续 Step 6（Git 备份）"],
+                "actions": ["重新调用 Data Agent", "继续 Step 5.5A（影响分析）"],
             }
+        ]
+
+    if step_id in {"Step 5.5A", "Step 5.5B"}:
+        return [
+            {
+                "option": "A",
+                "label": "从 Step 5.5A 重新开始",
+                "risk": "low",
+                "description": "重新执行动态大纲影响分析",
+                "actions": ["重新执行 Step 5.5A", "继续 Step 5.5B（如需要）", "继续 Step 6（Git 备份）"],
+            },
+            {
+                "option": "B",
+                "label": "跳过动态调纲",
+                "risk": "low",
+                "description": "跳过 5.5A/5.5B，直接进入 Git 备份",
+                "actions": ["跳过动态调纲步骤", "继续 Step 6（Git 备份）"],
+            },
         ]
 
     if step_id == "Step 6":
@@ -782,7 +803,8 @@ def get_pending_steps(command):
     """Get command pending step list."""
     if command == "webnovel-write":
         # v2: Step 1 内置 Contract v2，不再单独记录 Step 1.5，避免产生 step_order_violation 噪声。
-        return ["Step 1", "Step 2A", "Step 2B", "Step 3", "Step 4", "Step 5", "Step 6"]
+        # Step 5.5A/5.5B: 动态大纲影响分析（Step 5 完成后自动进入）
+        return ["Step 1", "Step 2A", "Step 2B", "Step 3", "Step 4", "Step 5", "Step 5.5A", "Step 5.5B", "Step 6"]
     if command == "webnovel-review":
         return ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5", "Step 6", "Step 7", "Step 8"]
     return []

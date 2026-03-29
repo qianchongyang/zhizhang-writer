@@ -94,6 +94,8 @@ class AdjustmentRecord:
     mainline_service_reason: Optional[str] = None
     return_to_mainline_by: Optional[int] = None
     rollback_reason: Optional[str] = None
+    # 完整的 mutation 前 runtime 快照（用于完整回滚）
+    before_runtime: Dict[str, Any] = field(default_factory=dict)
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -146,6 +148,8 @@ class OutlineMutationEngine:
         # 2. 加载当前运行时状态
         runtime = load_outline_runtime(self.config.outline_runtime_file)
         before_window = self._get_window_snapshot(runtime)
+        # 保存完整 runtime 快照，用于回滚时完整恢复
+        before_runtime = self._get_full_runtime_snapshot(runtime)
 
         # 3. 计算新的窗口状态
         after_window, new_nodes = self._compute_new_state(runtime, request)
@@ -175,6 +179,7 @@ class OutlineMutationEngine:
                 if request.declaration else None
             ),
             metadata=request.metadata,
+            before_runtime=before_runtime,
         )
 
         # 5. 验证锚点约束（如果提供了锚点管理器）
@@ -241,6 +246,33 @@ class OutlineMutationEngine:
             "end": runtime.active_window_end,
             "version": runtime.window_version,
             "volume": runtime.active_volume,
+        }
+
+    def _get_full_runtime_snapshot(self, runtime: OutlineRuntime) -> Dict[str, Any]:
+        """
+        获取完整 runtime 快照（12 个字段全部）
+
+        用于 mutation 开始前保存完整状态，确保回滚时可以完整恢复。
+        """
+        return {
+            "active_volume": runtime.active_volume,
+            "active_window_start": runtime.active_window_start,
+            "active_window_end": runtime.active_window_end,
+            "window_version": runtime.window_version,
+            "baseline_anchor_version": runtime.baseline_anchor_version,
+            "last_adjustment_chapter": runtime.last_adjustment_chapter,
+            "last_adjustment_type": runtime.last_adjustment_type,
+            "last_applied_adjustment_id": runtime.last_applied_adjustment_id,
+            "return_to_mainline_by": runtime.return_to_mainline_by,
+            "window_status": runtime.window_status,
+            "mainline_anchors": [
+                anchor.model_dump(mode="json") if hasattr(anchor, 'model_dump') else anchor
+                for anchor in runtime.mainline_anchors
+            ],
+            "active_nodes": [
+                node.model_dump(mode="json") if hasattr(node, 'model_dump') else node
+                for node in runtime.active_nodes
+            ],
         }
 
     def _compute_new_state(
@@ -548,13 +580,21 @@ class OutlineMutationEngine:
         3. 记录状态为 rolled_back
         """
         try:
-            # 1. 读取原始 runtime（步骤5之前的状态在 before_window 中）
+            # 1. 使用 before_runtime 快照完整恢复 runtime（12 个字段全部）
+            runtime_data = record.before_runtime
             original_runtime = OutlineRuntime(
-                active_volume=record.before_window.get("volume", 1),
-                active_window_start=record.before_window.get("start", 1),
-                active_window_end=record.before_window.get("end", 50),
-                window_version=record.before_window.get("version", 0),
-                # 其他字段需要从历史记录恢复，这里简化处理
+                active_volume=runtime_data.get("active_volume", 1),
+                active_window_start=runtime_data.get("active_window_start", 1),
+                active_window_end=runtime_data.get("active_window_end", 50),
+                window_version=runtime_data.get("window_version", 0),
+                baseline_anchor_version=runtime_data.get("baseline_anchor_version", 0),
+                last_adjustment_chapter=runtime_data.get("last_adjustment_chapter"),
+                last_adjustment_type=runtime_data.get("last_adjustment_type"),
+                last_applied_adjustment_id=runtime_data.get("last_applied_adjustment_id"),
+                return_to_mainline_by=runtime_data.get("return_to_mainline_by"),
+                window_status=runtime_data.get("window_status", "active"),
+                mainline_anchors=runtime_data.get("mainline_anchors", []),
+                active_nodes=runtime_data.get("active_nodes", []),
             )
 
             # 2. 回滚 runtime 文件
@@ -567,7 +607,7 @@ class OutlineMutationEngine:
             )
             temp_path.replace(self.config.outline_runtime_file)
 
-            # 3. 追加 rollback 记录到 JSONL
+            # 3. 追加 rollback 记录到 JSONL（保留 before_runtime 供审计）
             rollback_record = AdjustmentRecord(
                 adjustment_id=record.adjustment_id,
                 status="rolled_back",
@@ -579,6 +619,7 @@ class OutlineMutationEngine:
                 after_window=record.after_window,
                 written_at=datetime.now(timezone.utc).isoformat(),
                 rollback_reason=rollback_reason,
+                before_runtime=record.before_runtime,
             )
 
             self._append_rollback_record(rollback_record)
@@ -616,6 +657,8 @@ class OutlineMutationEngine:
             before_window=record.before_window,
             after_window=record.after_window,
             written_at=record.written_at,
+            rollback_reason=record.rollback_reason,
+            before_runtime=record.before_runtime,
         )
         # 直接用追加的方式写回滚记录
         append_outline_adjustment(self.config.outline_adjustments_file, adjustment)

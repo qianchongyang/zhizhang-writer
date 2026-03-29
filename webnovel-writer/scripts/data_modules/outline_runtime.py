@@ -72,7 +72,7 @@ class OutlineRuntime(BaseModel):
     # 活动窗口
     active_volume: int = 1  # 当前卷号
     active_window_start: int = 1  # 活动窗口起始章节
-    active_window_end: int = 50  # 活动窗口结束章节
+    active_window_end: int = 25  # 活动窗口结束章节
 
     # 版本控制
     window_version: int = 0  # 窗口版本（由 JSONL 追加触发增长）
@@ -113,6 +113,10 @@ class OutlineAdjustment(BaseModel):
     before_window: Dict[str, Any]  # 调整前窗口 {start, end, version}
     after_window: Dict[str, Any]  # 调整后窗口 {start, end, version}
 
+    # 回滚信息（用于 rollback 记录）
+    rollback_reason: Optional[str] = None  # 回滚原因
+    before_runtime: Optional[Dict[str, Any]] = None  # 完整 runtime 快照
+
     # 元信息
     written_at: str = Field(
         default_factory=lambda: datetime.now(timezone.utc).isoformat()
@@ -132,7 +136,7 @@ def normalize_outline_runtime(data: Dict[str, Any]) -> Dict[str, Any]:
     # 确保数值字段
     data.setdefault("active_volume", 1)
     data.setdefault("active_window_start", 1)
-    data.setdefault("active_window_end", 50)
+    data.setdefault("active_window_end", 25)
     data.setdefault("window_version", 0)
     data.setdefault("baseline_anchor_version", 0)
     data.setdefault("last_adjustment_chapter", None)
@@ -189,7 +193,7 @@ def _default_runtime_dict() -> Dict[str, Any]:
     return {
         "active_volume": 1,
         "active_window_start": 1,
-        "active_window_end": 50,
+        "active_window_end": 25,
         "window_version": 0,
         "baseline_anchor_version": 0,
         "last_adjustment_chapter": None,
@@ -344,10 +348,15 @@ def sync_runtime_version_from_adjustments(
 # ============================================================================
 
 
-def ensure_outline_runtime(project_root: Path) -> OutlineRuntime:
+def ensure_outline_runtime(project_root: Path, default_window_size: Optional[int] = None) -> OutlineRuntime:
     """确保项目具备动态大纲运行层文件，返回运行时状态
 
     兼容新项目初始化与已有项目加载。
+
+    Args:
+        project_root: 项目根目录
+        default_window_size: 可选的窗口大小覆盖。默认为 None，使用配置值。
+                            仅在新项目初始化时生效。
     """
     from .config import get_config
 
@@ -366,7 +375,9 @@ def ensure_outline_runtime(project_root: Path) -> OutlineRuntime:
             save_outline_runtime(runtime_file, runtime)
     else:
         # 新项目：创建默认状态
-        runtime = OutlineRuntime()
+        # 优先使用传入的 default_window_size，否则使用配置值
+        window_size = default_window_size if default_window_size is not None else config.default_window_size
+        runtime = OutlineRuntime(active_window_end=window_size)
         save_outline_runtime(runtime_file, runtime)
 
     return runtime

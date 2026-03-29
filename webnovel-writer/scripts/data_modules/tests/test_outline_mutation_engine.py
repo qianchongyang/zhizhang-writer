@@ -131,7 +131,7 @@ class TestOutlineMutationEngine:
         cfg = DataModulesConfig.from_project_root(tmp_path)
         cfg.ensure_dirs()
 
-        # 创建初始运行时文件
+        # 创建初始运行时文件（完整的 12 个字段）
         runtime_file = cfg.outline_runtime_file
         runtime_data = {
             "active_volume": 1,
@@ -139,6 +139,38 @@ class TestOutlineMutationEngine:
             "active_window_end": 50,
             "window_version": 0,
             "baseline_anchor_version": 0,
+            "last_adjustment_chapter": None,
+            "last_adjustment_type": None,
+            "last_applied_adjustment_id": None,
+            "return_to_mainline_by": None,
+            "window_status": "active",
+            "mainline_anchors": [],
+            "active_nodes": [],
+        }
+        runtime_file.write_text(json.dumps(runtime_data, ensure_ascii=False, indent=2))
+
+        return cfg
+
+    @pytest.fixture
+    def temp_project_for_rollback(self, tmp_path):
+        """创建临时项目（用于回滚测试，设置完整的 12 字段状态）"""
+        from data_modules.config import DataModulesConfig
+
+        cfg = DataModulesConfig.from_project_root(tmp_path)
+        cfg.ensure_dirs()
+
+        # 创建初始运行时文件（完整的 12 个字段，用于验证完整回滚）
+        runtime_file = cfg.outline_runtime_file
+        runtime_data = {
+            "active_volume": 1,
+            "active_window_start": 1,
+            "active_window_end": 50,
+            "window_version": 5,
+            "baseline_anchor_version": 2,
+            "last_adjustment_chapter": 30,
+            "last_adjustment_type": "minor_reorder",
+            "last_applied_adjustment_id": "prev-adjustment-id",
+            "return_to_mainline_by": 100,
             "window_status": "active",
             "mainline_anchors": [],
             "active_nodes": [],
@@ -350,10 +382,14 @@ class TestOutlineMutationEngine:
         jsonl_file = temp_project.outline_adjustments_file
         assert jsonl_file.exists()
 
-    def test_rollback_on_markdown_failure(self, engine, temp_project):
-        """Markdown 写回失败时回滚 runtime"""
-        from data_modules.outline_mutation_engine import MutationRequest
+    def test_rollback_on_markdown_failure(self, temp_project_for_rollback):
+        """Markdown 写回失败时回滚 runtime（完整 12 字段恢复）"""
+        from data_modules.outline_mutation_engine import MutationRequest, OutlineMutationEngine
         from data_modules.outline_runtime import load_outline_runtime
+
+        # 使用专门的回滚测试 fixture（包含完整的 12 字段初始状态）
+        cfg = temp_project_for_rollback
+        engine = OutlineMutationEngine(cfg)
 
         # 创建一个会导致 Markdown 更新失败的场景
         # 修改 engine 的 _update_markdown_outline 方法使其返回 False
@@ -378,16 +414,32 @@ class TestOutlineMutationEngine:
         # 应该回滚
         assert result.success is False
         assert result.rolled_back is True
+        assert result.rollback_reason == "markdown_write_failed"
 
-        # runtime 应该回滚到之前的状态
-        runtime = load_outline_runtime(temp_project.outline_runtime_file)
+        # runtime 应该回滚到 mutation 前的完整状态（12 个字段全部恢复）
+        runtime = load_outline_runtime(temp_project_for_rollback.outline_runtime_file)
         assert runtime.active_window_end == 50  # 原始值
+        assert runtime.active_window_start == 1  # 原始值
+        assert runtime.active_volume == 1  # 原始值
+        assert runtime.window_version == 5  # 原始值（未回退到 0）
+        assert runtime.baseline_anchor_version == 2  # 原始值
+        assert runtime.last_adjustment_chapter == 30  # 原始值
+        assert runtime.last_adjustment_type == "minor_reorder"  # 原始值
+        assert runtime.last_applied_adjustment_id == "prev-adjustment-id"  # 原始值
+        assert runtime.return_to_mainline_by == 100  # 原始值
+        assert runtime.window_status == "active"  # 原始值
 
         # JSONL 应该有 rollback 记录
-        jsonl_file = temp_project.outline_adjustments_file
+        jsonl_file = temp_project_for_rollback.outline_adjustments_file
         lines = jsonl_file.read_text().splitlines()
         last_record = json.loads(lines[-1])
         assert last_record.get("status") == "rolled_back"
+        assert last_record.get("rollback_reason") == "markdown_write_failed"
+        # 保留原始 adjustment_id
+        assert last_record.get("adjustment_id") == result.adjustment_id
+        # before_runtime 包含完整 12 字段快照
+        assert "before_runtime" in last_record
+        assert last_record["before_runtime"]["window_version"] == 5
 
     def test_get_last_adjustment_id(self, engine, temp_project):
         """获取最后 adjustment_id"""
@@ -429,6 +481,10 @@ class TestExecuteAdjustment:
             "active_window_end": 50,
             "window_version": 0,
             "baseline_anchor_version": 0,
+            "last_adjustment_chapter": None,
+            "last_adjustment_type": None,
+            "last_applied_adjustment_id": None,
+            "return_to_mainline_by": None,
             "window_status": "active",
             "mainline_anchors": [],
             "active_nodes": [],
@@ -514,6 +570,10 @@ class TestWindowVersionIncrement:
             "active_window_end": 50,
             "window_version": 0,
             "baseline_anchor_version": 0,
+            "last_adjustment_chapter": None,
+            "last_adjustment_type": None,
+            "last_applied_adjustment_id": None,
+            "return_to_mainline_by": None,
             "window_status": "active",
             "mainline_anchors": [],
             "active_nodes": [],
@@ -558,6 +618,10 @@ class TestWindowVersionIncrement:
             "active_window_end": 50,
             "window_version": 0,
             "baseline_anchor_version": 0,
+            "last_adjustment_chapter": None,
+            "last_adjustment_type": None,
+            "last_applied_adjustment_id": None,
+            "return_to_mainline_by": None,
             "window_status": "active",
             "mainline_anchors": [],
             "active_nodes": [],

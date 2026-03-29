@@ -9,6 +9,41 @@
 - 首页、安装路径、命令、元数据、文档索引这些可见变化，都应该记录
 - 只记录结论和结果，不记录内部争论过程
 
+## 2026-03-29：章节闭环修复与 skill 可移植性更新
+
+### 1. 第 13/14 章闭环修复
+
+- `scripts/data_modules/state_manager.py`、`sql_state_manager.py`、`webnovel.py`、`workflow_manager.py` 补齐了章节索引、审查合并和完成态派生
+- 新增/更新了对应测试，覆盖章节落表、审查合并和工作流完成态
+- 这次修复重点是把“写完一章”真正收束为“正文、审查、状态、索引、完成态”一致
+
+**影响范围**
+
+- 章节写作流程更接近稳定闭环
+- 第 13/14 章暴露的缺口不会只在当前机器上出现，发布后其他用户也能受益
+
+**验证方式**
+
+- 本地目标测试通过：`test_state_manager_extra.py`、`test_webnovel_merge.py`、`test_workflow_manager.py`
+- 第 13 章产物对照验证通过，闭环缺口已补
+
+### 2. skill 启动逻辑改成可移植
+
+- `webnovel-write` / `zhizhang-write` 的 Step 0 去掉个人绝对路径，改为插件根自动探测
+- 同步将 `webnovel-init / plan / review / query / resume / dashboard` 的入口命令统一为 `python3`
+- 对已安装插件缓存目录也同步了同样的 skill 更新，避免新会话继续读旧逻辑
+
+**影响范围**
+
+- 新项目不再因为 `CLAUDE_PLUGIN_ROOT` 缺失直接卡死
+- 其他机器安装时不再依赖我本机路径
+
+**验证方式**
+
+- 手动检查 skill 的 Step 0 逻辑和安装缓存目录一致
+
+---
+
 ## 2026-03-29：首页与日志规范升级
 
 ### 1. 首页改成 Claude 优先入口

@@ -11,4 +11,4 @@ allowed-tools: Read Write Edit Grep Bash Task
 执行原则：
 - 新品牌对外使用 `/zhizhang-write`
 - 旧兼容命令 `/webnovel-write` 继续可用
-- 写作流程、审查流程与数据回写以 `webnovel-write` 的规范为准
+- 写作流程、审查流程与数据回写以 `webnovel-write` 的规范为准，包含本地回退式启动逻辑

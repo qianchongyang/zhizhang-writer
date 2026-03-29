@@ -13,6 +13,8 @@ SQL State Manager - SQLite 状态管理模块 (v5.4)
 """
 
 import json
+import re
+from pathlib import Path
 from typing import Dict, List, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -171,6 +173,122 @@ class SQLStateManager:
         if protagonist:
             protagonist["aliases"] = self._index_manager.get_entity_aliases(protagonist["id"])
         return protagonist
+
+    def _count_chapter_words(self, content: str) -> int:
+        text = re.sub(r"```[\s\S]*?```", "", content)
+        text = re.sub(r"^#+ .+$", "", text, flags=re.MULTILINE)
+        text = re.sub(r"---", "", text)
+        return len(re.sub(r"\s+", "", text))
+
+    def _extract_chapter_title(self, content: str, chapter: int, chapter_file: Optional[Path] = None) -> str:
+        patterns = [
+            re.compile(r"^\s*#\s*第\s*(?P<num>\d+)\s*章[：:]\s*(?P<title>.+?)\s*$", re.MULTILINE),
+            re.compile(r"^\s*#+\s*第\s*(?P<num>\d+)\s*章\s+(?P<title>.+?)\s*$", re.MULTILINE),
+        ]
+        for pattern in patterns:
+            match = pattern.search(content)
+            if match and int(match.group("num")) == int(chapter):
+                title = str(match.group("title") or "").strip()
+                if title:
+                    return title
+
+        if chapter_file is not None:
+            fallback = re.match(r"^第0*(?P<num>\d+)章[-—_ ]+(?P<title>.+)$", chapter_file.stem)
+            if fallback and int(fallback.group("num")) == int(chapter):
+                title = str(fallback.group("title") or "").strip()
+                if title:
+                    return title
+
+        return f"第{int(chapter)}章"
+
+    def _extract_chapter_location(self, chapter_meta: Dict[str, Any]) -> str:
+        if not isinstance(chapter_meta, dict):
+            return ""
+        ending = chapter_meta.get("ending")
+        if isinstance(ending, dict):
+            location = ending.get("location")
+            if location:
+                return str(location).strip()
+        location = chapter_meta.get("location")
+        if location:
+            return str(location).strip()
+        return ""
+
+    def _extract_chapter_characters(
+        self,
+        entities_appeared: List[Dict[str, Any]],
+        entities_new: List[Dict[str, Any]],
+    ) -> List[str]:
+        characters: List[str] = []
+        seen = set()
+
+        def _append(entity_id: Any, entity_type: Any = None):
+            if entity_type and str(entity_type).strip() not in {"角色", ""}:
+                return
+            entity_key = str(entity_id or "").strip()
+            if not entity_key or entity_key in seen:
+                return
+            seen.add(entity_key)
+            characters.append(entity_key)
+
+        for entity in entities_appeared or []:
+            if isinstance(entity, dict):
+                _append(entity.get("id"), entity.get("type"))
+
+        for entity in entities_new or []:
+            if isinstance(entity, dict):
+                _append(entity.get("suggested_id") or entity.get("id"), entity.get("type"))
+
+        return characters
+
+    def sync_chapter_index(
+        self,
+        chapter: int,
+        chapter_file: str | None = None,
+        chapter_meta: Optional[Dict[str, Any]] = None,
+        entities_appeared: Optional[List[Dict[str, Any]]] = None,
+        entities_new: Optional[List[Dict[str, Any]]] = None,
+    ) -> bool:
+        """从正文文件同步章节主索引到 chapters 表。"""
+        if not chapter_file:
+            return False
+
+        chapter_path = Path(chapter_file)
+        if not chapter_path.exists():
+            return False
+
+        content = chapter_path.read_text(encoding="utf-8")
+        title = self._extract_chapter_title(content, chapter, chapter_path)
+        word_count = self._count_chapter_words(content)
+        location = self._extract_chapter_location(chapter_meta or {})
+        if not location:
+            protagonist = self.get_protagonist()
+            if protagonist:
+                current_json = protagonist.get("current_json") or {}
+                if isinstance(current_json, dict):
+                    location = str(current_json.get("location") or "").strip()
+
+        summary_path = self.config.webnovel_dir / "summaries" / f"ch{int(chapter):04d}.md"
+        summary = ""
+        if summary_path.exists():
+            try:
+                summary = summary_path.read_text(encoding="utf-8").strip()
+            except Exception:
+                summary = ""
+
+        characters = self._extract_chapter_characters(entities_appeared or [], entities_new or [])
+        from .index_manager import ChapterMeta
+        self._index_manager.add_chapter(
+            ChapterMeta(
+                chapter=int(chapter),
+                title=title,
+                location=location,
+                word_count=word_count,
+                characters=characters,
+                summary=summary,
+            )
+        )
+        return True
 
     def update_entity_current(self, entity_id: str, updates: Dict) -> bool:
         """增量更新实体的 current 字段"""

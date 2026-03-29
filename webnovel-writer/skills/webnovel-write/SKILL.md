@@ -116,26 +116,46 @@ allowed-tools: Read Write Edit Grep Bash Task
 
 必须做：
 - 解析真实书项目根（book project_root）：必须包含 `.webnovel/state.json`。
-- 校验核心输入：`大纲/总纲.md`、`${CLAUDE_PLUGIN_ROOT}/scripts/extract_chapter_context.py` 存在。
+- 校验核心输入：`大纲/总纲.md`、`scripts/extract_chapter_context.py` 存在。
 - 规范化变量：
   - `WORKSPACE_ROOT`：Claude Code 打开的工作区根目录（可能是书项目的父目录，例如 `D:\wk\xiaoshuo`）
   - `PROJECT_ROOT`：真实书项目根目录（必须包含 `.webnovel/state.json`，例如 `D:\wk\xiaoshuo\凡人资本论`）
-  - `SKILL_ROOT`：skill 所在目录（固定 `${CLAUDE_PLUGIN_ROOT}/skills/webnovel-write`）
-  - `SCRIPTS_DIR`：脚本目录（固定 `${CLAUDE_PLUGIN_ROOT}/scripts`）
+  - `CLAUDE_PLUGIN_ROOT`：优先使用 Claude Code 注入的插件根目录；若未注入，则回退到 `$HOME/.claude/plugins/marketplaces/webnovel-writer-marketplace/webnovel-writer`
+  - `SKILL_ROOT`：skill 所在目录（由 `CLAUDE_PLUGIN_ROOT` 解析）
+  - `SCRIPTS_DIR`：脚本目录（由 `CLAUDE_PLUGIN_ROOT` 解析）
   - `chapter_num`：当前章号（整数）
   - `chapter_padded`：四位章号（如 `0007`）
 
 环境设置（bash 命令执行前）：
 ```bash
 export WORKSPACE_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
-export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT is required}/scripts"
-export SKILL_ROOT="${CLAUDE_PLUGIN_ROOT:?CLAUDE_PLUGIN_ROOT is required}/skills/webnovel-write"
+if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  export CLAUDE_PLUGIN_ROOT="${HOME}/.claude/plugins/marketplaces/webnovel-writer-marketplace/webnovel-writer"
+fi
+if [ ! -x "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" ]; then
+  for candidate in \
+    "${CLAUDE_PLUGIN_ROOT}" \
+    "${CLAUDE_PROJECT_DIR:-$PWD}/webnovel-writer" \
+    "${CLAUDE_PROJECT_DIR:-$PWD}/webnovel-writer/webnovel-writer"
+  do
+    if [ -n "$candidate" ] && [ -x "$candidate/scripts/webnovel.py" ]; then
+      export CLAUDE_PLUGIN_ROOT="$candidate"
+      break
+    fi
+  done
+fi
+if [ -z "${CLAUDE_PLUGIN_ROOT:-}" ] || [ ! -x "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" ]; then
+  echo "无法定位织章插件根目录：请在 Claude Code 中运行，或显式设置 CLAUDE_PLUGIN_ROOT 为插件根目录" >&2
+  exit 1
+fi
+export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
+export SKILL_ROOT="${CLAUDE_PLUGIN_ROOT}/skills/webnovel-write"
 
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" preflight
-export PROJECT_ROOT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" preflight
+export PROJECT_ROOT="$(python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
 ```
 
-**硬门槛**：`preflight` 必须成功。它统一校验 `CLAUDE_PLUGIN_ROOT` 派生出的 `SKILL_ROOT` / `SCRIPTS_DIR`、`webnovel.py`、`extract_chapter_context.py` 和解析出的 `PROJECT_ROOT`。任一失败都立即阻断。
+**硬门槛**：`preflight` 必须成功。它统一校验 `SKILL_ROOT` / `SCRIPTS_DIR`、`webnovel.py`、`extract_chapter_context.py` 和解析出的 `PROJECT_ROOT`。任一失败都立即阻断。
 
 输出：
 - “已就绪输入”与“缺失输入”清单；缺失则阻断并提示先补齐。
@@ -143,10 +163,10 @@ export PROJECT_ROOT="$(python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-roo
 ### Step 0.5：工作流断点记录（best-effort，不阻断）
 
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow start-task --command webnovel-write --chapter {chapter_num} || true
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow start-step --step-id "Step 1" --step-name "Context Agent" || true
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-step --step-id "Step 1" --artifacts '{"ok":true}' || true
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-task --artifacts '{"ok":true}' || true
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow start-task --command webnovel-write --chapter {chapter_num} || true
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow start-step --step-id "Step 1" --step-name "Context Agent" || true
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-step --step-id "Step 1" --artifacts '{"ok":true}' || true
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-task --artifacts '{"ok":true}' || true
 ```
 
 要求：
@@ -180,15 +200,15 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" wor
 ### Step 1.5：主Agent精简上下文加载（改造后）
 
 # 调用Context Agent独立输出模式，结果写入文件
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
   context \
   --chapter ${chapter_num} \
   --output-file "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json"
 
 # 主Agent仅加载精简后的上下文（不加载完整state/index）
-export CONTEXT_TASK_SUMMARY="$(python -X utf8 -c "import json; print(json.load(open('${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json'))['task_summary'])")"
-export CONTEXT_CONSTRAINTS="$(python -X utf8 -c "import json; print(','.join(json.load(open('${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json'))['constraints']))")"
-export CONTEXT_STYLE="$(python -X utf8 -c "import json; print(json.load(open('${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json'))['style_guide'])")"
+export CONTEXT_TASK_SUMMARY="$(python3 -X utf8 -c "import json; print(json.load(open('${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json'))['task_summary'])")"
+export CONTEXT_CONSTRAINTS="$(python3 -X utf8 -c "import json; print(','.join(json.load(open('${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json'))['constraints']))")"
+export CONTEXT_STYLE="$(python3 -X utf8 -c "import json; print(json.load(open('${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json'))['style_guide'])")"
 
 # 主Agent使用精简上下文执行后续步骤
 
@@ -277,7 +297,7 @@ cat "${SKILL_ROOT}/references/step-3-review-gate.md"
 
 审查指标落库（必做）：
 ```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index save-review-metrics --data "@${PROJECT_ROOT}/.webnovel/tmp/review_metrics.json"
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index save-review-metrics --data "@${PROJECT_ROOT}/.webnovel/tmp/review_metrics.json"
 ```
 
 review_metrics 字段约束（当前工作流约定只传以下字段）：
@@ -309,7 +329,7 @@ review_metrics 字段约束（当前工作流约定只传以下字段）：
 
 ```bash
 # 合并审查结果
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
   merge \
   --group1 "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/rev1_ch${chapter_padded}.json" \
   --group2 "${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/rev2_ch${chapter_padded}.json" \
@@ -417,7 +437,7 @@ git -c i18n.commitEncoding=UTF-8 commit -m "第{chapter_num}章: {title}"
 test -f "${PROJECT_ROOT}/.webnovel/state.json"
 test -f "${PROJECT_ROOT}/正文/第${chapter_padded}章.md"
 test -f "${PROJECT_ROOT}/.webnovel/summaries/ch${chapter_padded}.md"
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index get-recent-review-metrics --limit 1
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" index get-recent-review-metrics --limit 1
 tail -n 1 "${PROJECT_ROOT}/.webnovel/observability/data_agent_timing.jsonl" || true
 ```
 

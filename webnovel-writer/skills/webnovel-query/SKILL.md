@@ -28,7 +28,7 @@ if [ -z "${CLAUDE_PLUGIN_ROOT}" ] || [ ! -d "${CLAUDE_PLUGIN_ROOT}/scripts" ]; t
 fi
 export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
 
-export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
+export PROJECT_ROOT="$(python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
 ```
 
 ## Workflow Checklist
@@ -143,7 +143,7 @@ cat "$PROJECT_ROOT/.webnovel/state.json"
 
 **快速分析**：
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" status -- --focus urgency
+python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" status -- --focus urgency
 ```
 
 ### 金手指状态
@@ -160,7 +160,7 @@ python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" status -- --f
 
 **快速分析**：
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" status -- --focus strand
+python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" status -- --focus strand
 ```
 
 **检查警告**：

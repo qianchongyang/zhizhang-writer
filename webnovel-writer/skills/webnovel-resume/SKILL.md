@@ -27,7 +27,7 @@ if [ -z "${CLAUDE_PLUGIN_ROOT}" ] || [ ! -d "${CLAUDE_PLUGIN_ROOT}/scripts" ]; t
 fi
 export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
 
-export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
+export PROJECT_ROOT="$(python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
 ```
 
 ## Workflow Checklist
@@ -102,7 +102,7 @@ cat "${SKILL_ROOT}/references/system-data-flow.md"
 ## Step 4: 检测中断状态
 
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" workflow detect
+python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" workflow detect
 ```
 
 **输出情况**：
@@ -145,14 +145,14 @@ B) 回滚到Ch6，放弃Ch7所有进度
 
 **选项 A - 删除重来**（推荐）：
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" workflow cleanup --chapter {N} --confirm
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" workflow clear
+python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" workflow cleanup --chapter {N} --confirm
+python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" workflow clear
 ```
 
 **选项 B - Git 回滚**：
 ```bash
 git -C "$PROJECT_ROOT" reset --hard ch{N-1:04d}
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" workflow clear
+python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" workflow clear
 ```
 
 ## Step 7: 继续任务（可选）

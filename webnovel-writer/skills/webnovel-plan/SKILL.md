@@ -28,7 +28,7 @@ if [ -z "${CLAUDE_PLUGIN_ROOT}" ] || [ ! -d "${CLAUDE_PLUGIN_ROOT}/scripts" ]; t
 fi
 export SCRIPTS_DIR="${CLAUDE_PLUGIN_ROOT}/scripts"
 
-export PROJECT_ROOT="$(python "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
+export PROJECT_ROOT="$(python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${WORKSPACE_ROOT}" where)"
 ```
 
 ## References（按步骤导航）
@@ -438,7 +438,7 @@ Every chapter must have:
 
 Update state (include chapters range):
 ```bash
-python "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" update-state -- \
+python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "$PROJECT_ROOT" update-state -- \
   --volume-planned {volume_id} \
   --chapters-range "{start}-{end}"
 ```

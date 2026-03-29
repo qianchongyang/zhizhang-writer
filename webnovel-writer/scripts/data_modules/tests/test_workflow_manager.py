@@ -46,6 +46,35 @@ def test_workflow_lifecycle_and_trace(tmp_path, monkeypatch):
     assert "task_completed" in events
 
 
+def test_workflow_completed_state_derives_artifacts(tmp_path, monkeypatch):
+    module = _load_module()
+    monkeypatch.setattr(module, "find_project_root", lambda: tmp_path)
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+
+    module.start_task("webnovel-write", {"chapter_num": 13})
+    module.start_step("Step 1", "Context")
+    module.complete_step("Step 1", json.dumps({"ok": True}, ensure_ascii=False))
+    module.start_step("Step 2A", "Draft")
+    module.complete_step("Step 2A", json.dumps({"ok": True}, ensure_ascii=False))
+    module.start_step("Step 2B", "Draft polish")
+    module.complete_step("Step 2B", json.dumps({"ok": True}, ensure_ascii=False))
+    module.start_step("Step 3", "Review")
+    module.complete_step("Step 3", json.dumps({"ok": True}, ensure_ascii=False))
+    module.start_step("Step 4", "Polish")
+    module.complete_step("Step 4", json.dumps({"ok": True}, ensure_ascii=False))
+    module.start_step("Step 5", "Data Agent")
+    module.complete_step("Step 5", json.dumps({"ok": True}, ensure_ascii=False))
+    module.complete_task(json.dumps({"ok": True}, ensure_ascii=False))
+
+    state = module.load_state()
+    artifacts = state["last_stable_state"]["artifacts"]
+    assert artifacts["review_completed"] is True
+    assert artifacts["state_json_modified"] is True
+    assert artifacts["entities_appeared"] is True
+
+
 def test_start_task_reentry_increments_retry(tmp_path, monkeypatch):
     module = _load_module()
     monkeypatch.setattr(module, "find_project_root", lambda: tmp_path)

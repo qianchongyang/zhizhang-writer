@@ -15,6 +15,7 @@ v5.1 变更（v5.4 沿用）:
 
 import json
 import logging
+import re
 import sys
 import time
 from copy import deepcopy
@@ -46,6 +47,11 @@ try:
 except ImportError:  # pragma: no cover
     # 当以 `python -m scripts.data_modules...` 从仓库根目录运行
     from scripts.security_utils import atomic_write_json, read_json_safe
+
+try:
+    from chapter_paths import find_chapter_file
+except ImportError:  # pragma: no cover
+    from scripts.chapter_paths import find_chapter_file
 
 
 @dataclass
@@ -424,6 +430,19 @@ class StateManager:
             except Exception as exc:
                 logger.warning("SQLite sync failed (process_chapter_entities): %s", exc)
                 return False
+
+        chapter_index = sqlite_data.get("chapter_index")
+        if chapter_index and chapter is not None:
+            try:
+                self._sql_state_manager.sync_chapter_index(
+                    chapter=chapter,
+                    chapter_file=chapter_index.get("chapter_file"),
+                    chapter_meta=chapter_index.get("chapter_meta") or {},
+                    entities_appeared=chapter_index.get("entities_appeared", []),
+                    entities_new=chapter_index.get("entities_new", []),
+                )
+            except Exception as exc:
+                logger.warning("SQLite sync failed (sync_chapter_index): %s", exc)
 
         # 方式2: 使用 add_entity/update_entity 收集的增量数据。
         # 数据缓存在 _pending_entity_patches 等变量中。
@@ -1394,6 +1413,17 @@ class StateManager:
                 if len(checkpoints) > 50:
                     del checkpoints[:-50]
 
+        chapter_file = find_chapter_file(self.config.project_root, chapter)
+        if chapter_file and chapter_file.exists():
+            self._pending_sqlite_data["chapter_index"] = {
+                "chapter_file": str(chapter_file),
+                "chapter_meta": deepcopy(chapter_meta) if isinstance(chapter_meta, dict) else {},
+                "entities_appeared": deepcopy(result.get("entities_appeared") or []),
+                "entities_new": deepcopy(result.get("entities_new") or []),
+            }
+        else:
+            logger.warning("chapter index sync skipped: missing chapter file for chapter %s", chapter)
+
         # v5.6 新增: 处理角色状态（外貌/穿着/性别表达）
         for character_id, states in result.get("character_states", {}).items():
             for state_type, state_data in states.items():
@@ -1617,6 +1647,126 @@ class StateManager:
         if chapter_meta:
             expanded["chapter_meta"] = chapter_meta
         return expanded
+
+    def _count_chapter_words(self, content: str) -> int:
+        text = re.sub(r"```[\s\S]*?```", "", content)
+        text = re.sub(r"^#+ .+$", "", text, flags=re.MULTILINE)
+        text = re.sub(r"---", "", text)
+        return len(re.sub(r"\s+", "", text))
+
+    def _extract_chapter_title(self, content: str, chapter: int, chapter_file: Optional[Path] = None) -> str:
+        title_patterns = [
+            re.compile(r"^\s*#\s*第\s*(?P<num>\d+)\s*章[：:]\s*(?P<title>.+?)\s*$", re.MULTILINE),
+            re.compile(r"^\s*#+\s*第\s*(?P<num>\d+)\s*章\s+(?P<title>.+?)\s*$", re.MULTILINE),
+        ]
+        for pattern in title_patterns:
+            match = pattern.search(content)
+            if match and int(match.group("num")) == int(chapter):
+                title = str(match.group("title") or "").strip()
+                if title:
+                    return title
+
+        if chapter_file is not None:
+            fallback = re.match(r"^第0*(?P<num>\d+)章[-—_ ]+(?P<title>.+)$", chapter_file.stem)
+            if fallback and int(fallback.group("num")) == int(chapter):
+                title = str(fallback.group("title") or "").strip()
+                if title:
+                    return title
+
+        return f"第{int(chapter)}章"
+
+    def _extract_chapter_location(self, chapter_meta: Dict[str, Any]) -> str:
+        if not isinstance(chapter_meta, dict):
+            return ""
+        ending = chapter_meta.get("ending")
+        if isinstance(ending, dict):
+            location = ending.get("location")
+            if location:
+                return str(location).strip()
+        location = chapter_meta.get("location")
+        if location:
+            return str(location).strip()
+        return ""
+
+    def _extract_chapter_characters(
+        self,
+        entities_appeared: List[Dict[str, Any]],
+        entities_new: List[Dict[str, Any]],
+    ) -> List[str]:
+        characters: List[str] = []
+        seen = set()
+
+        def _append(entity_id: Any, entity_type: Any = None):
+            if entity_type and str(entity_type).strip() not in {"角色", ""}:
+                return
+            entity_key = str(entity_id or "").strip()
+            if not entity_key or entity_key in seen:
+                return
+            seen.add(entity_key)
+            characters.append(entity_key)
+
+        for entity in entities_appeared or []:
+            if isinstance(entity, dict):
+                _append(entity.get("id"), entity.get("type"))
+
+        for entity in entities_new or []:
+            if isinstance(entity, dict):
+                _append(entity.get("suggested_id") or entity.get("id"), entity.get("type"))
+
+        return characters
+
+    def _sync_chapter_index_entry(self, chapter: int, result: Dict[str, Any]) -> Optional[str]:
+        if not self._sql_state_manager:
+            return None
+
+        chapter_file = find_chapter_file(self.config.project_root, chapter)
+        if not chapter_file or not chapter_file.exists():
+            return f"章节索引同步跳过: 未找到第 {chapter} 章正文文件"
+
+        try:
+            content = chapter_file.read_text(encoding="utf-8")
+        except Exception as exc:
+            return f"章节索引同步失败: 无法读取正文文件 {chapter_file.name}: {exc}"
+
+        chapter_meta = result.get("chapter_meta") if isinstance(result.get("chapter_meta"), dict) else {}
+        title = self._extract_chapter_title(content, chapter, chapter_file)
+        word_count = self._count_chapter_words(content)
+        location = self._extract_chapter_location(chapter_meta)
+        if not location:
+            protagonist = self._state.get("protagonist_state", {})
+            if isinstance(protagonist, dict):
+                loc = protagonist.get("location", {})
+                if isinstance(loc, dict):
+                    location = str(loc.get("current") or "").strip()
+                elif loc:
+                    location = str(loc).strip()
+
+        characters = self._extract_chapter_characters(
+            result.get("entities_appeared", []) if isinstance(result.get("entities_appeared"), list) else [],
+            result.get("entities_new", []) if isinstance(result.get("entities_new"), list) else [],
+        )
+
+        summary_path = self.config.webnovel_dir / "summaries" / f"ch{int(chapter):04d}.md"
+        summary_text = ""
+        if summary_path.exists():
+            try:
+                summary_text = summary_path.read_text(encoding="utf-8").strip()
+            except Exception as exc:
+                logger.warning("summary read failed for chapter %s: %s", chapter, exc)
+
+        from .index_manager import ChapterMeta
+
+        self._sql_state_manager._index_manager.add_chapter(
+            ChapterMeta(
+                chapter=int(chapter),
+                title=title,
+                location=location,
+                word_count=word_count,
+                characters=characters,
+                summary=summary_text,
+            )
+        )
+        return None
 
     def _append_emotional_arc_entries(
         self,

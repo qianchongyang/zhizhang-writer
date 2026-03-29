@@ -3,174 +3,198 @@
 [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-purple.svg)](https://claude.ai/claude-code)
+[![Version](https://img.shields.io/badge/version-v5.25.0-blue.svg)](https://github.com/qianchongyang/zhizhang-writer)
 
-`织章 Zhizhang Writer` 是一个基于 Claude Code 的长篇网文创作系统，围绕“大纲约束、上下文召回、状态追踪、章节审查”构建，帮助创作者在长周期连载中降低遗忘、幻觉和前后冲突。
+> **长篇网文连载辅助系统**：自动追踪设定/状态/伏笔，六维审查防冲突，动态大纲随写随调，200 万字不乱。
 
-本仓库基于 `lingfengQAQ/webnovel-writer` fork 并二次开发，保留 GPL-3.0 开源协议，同时作为独立品牌持续维护。
+---
 
-## 重点能力
-
-**动态大纲**是织章最核心的能力之一。它不是“写完一章后手动改纲”，而是把“评估后续窗口、插入副本、调整节奏、阻断偏航”直接内嵌进 `/zhizhang-write` 主流程。
-
-- 初始化阶段先生成总纲、卷纲和首批章纲
-- 写作阶段每写完一章，自动评估后续窗口是否需要动态调整
-- 遇到副本、关系跃迁、节奏延伸时，自动给出影响预览和调纲决策
-- 调纲失败时会阻断提交，避免把脏状态写进运行层
-
-详细原理和日常用法见：[动态大纲手册](docs/dynamic-outline-guide.md)
-
-## 快速导航
-
-- [Claude 安装与启动](#claude-安装与启动)
-- [3 步上手](#3-步上手)
-- [适合谁](#适合谁)
-- [核心能力](#核心能力)
-- [文档索引](#文档索引)
-- [命令兼容](#命令兼容)
-- [最近更新](#最近更新)
-- [贡献与边界](#贡献与边界)
-- [来源与致谢](#来源与致谢)
-
-## Claude 安装与启动
-
-`织章` 的安装入口优先围绕 Claude Code 设计。你不需要先 clone 仓库，也不需要先有自己的 GitHub 仓库。
-
-**普通用户直接复制这两条：**
+## 10 秒体验
 
 ```bash
+# 1. 安装（一行命令）
 claude plugin marketplace add qianchongyang/zhizhang-writer --scope user
-claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
-```
 
-安装完直接输入：
-
-```bash
-/zhizhang-menu
-```
-
-**进阶用户说明：**
-
-- 已安装过旧版本时，执行 `claude plugin update zhizhang-writer@zhizhang-marketplace --scope user`
-- 仅当前项目生效时，把 `--scope user` 改成 `--scope project`
-- GitHub 只是公开发布源，不是使用门槛
-
-`/zhizhang-menu` 会显示当前可用命令和入口。
-
-## 3 步上手
-
-### 1. 初始化项目
-
-```bash
+# 2. 初始化项目
 /zhizhang-init
-```
 
-### 2. 查看命令与工作流
-
-```bash
-/zhizhang-menu
-```
-
-### 3. 开始写作
-
-```bash
-/zhizhang-plan 1
+# 3. 开始写作（自动走完所有流程）
 /zhizhang-write 1
-/zhizhang-review 1-5
 ```
 
-## 适合谁
+写完第 1 章，系统自动完成：上下文构建 → 起草 → 六维审查 → 润色 → 数据落盘 → **动态大纲评估**（自动判断后续窗口是否需要调整）。
 
-- 想把小说做成长篇连载的人
-- 需要管理设定、状态、伏笔和章节节奏的人
-- 想在 Claude Code 上快速搭建写作工作流的人
-- 想参与二次开发和 PR 贡献的人
+---
+
+## 动态大纲是什么？
+
+**传统方式**：写完第 45 章 → 手动翻大纲 → 发现要插副本 → 手动改总纲 → 重新编号 → 花 2 小时
+
+**织章方式**：写完第 45 章 → Step 5.5A 自动评估 → "第 46-48 章需要关系铺垫" → Step 5.5B 自动扩展窗口 → 写第 46 章时上下文自动带上铺垫内容
+
+**保证不偏**：
+- 锚点保护机制，确保副本永远服务主线
+- 扩窗有 1.5 倍硬上限，不会无限膨胀
+- 调纲失败阻断 Git 提交，不留脏数据
+
+---
 
 ## 核心能力
 
-- 大纲即法律，写前先过硬闸门
-- 设定即物理，避免前后冲突
-- 发明需识别，新实体自动入库
-- 双 Agent 协作：Context Agent + Data Agent
-- 六维并行审查：爽点、一致性、节奏、人设、连贯性、追读力
-- 动态大纲：自动评估窗口变化、插入副本、阻断偏航
-- 记忆与召回：状态、伏笔、章节摘要、语义索引
-- Dashboard：只读运行面板，便于排障和复盘
+| 能力 | 说明 |
+|------|------|
+| **防幻觉三定律** | 大纲即法律 / 设定即物理 / 发明需入库 |
+| **双 Agent** | Context Agent 构建上下文，Data Agent 提取状态 |
+| **六维并行审查** | 爽点、一致性、节奏、人设、连贯性、追读力 |
+| **动态大纲** | 写完即评估、影响预览、原子性写回、失败阻断 |
+| **记忆召回** | state.json / index.db / vectors.db / story_memory.json |
+| **Dashboard** | 只读可视化面板，写前排查上下文 |
+| **经营化** | 读者反馈、追读力分析、连载节奏模板 |
 
-## 文档索引
+---
 
-如果你只想快速找入口，先看这几份：
+## 适用场景
 
-- [文档中心](docs/README.md)
-- [新手 / 进阶 / 高级与开源协作指南](docs/open-source-guide.md)
-- [提交代码规则](docs/commit-rules.md)
-- [版本变更日志](docs/CHANGELOG.md)
+| 场景 | 用什么命令 |
+|------|-----------|
+| 写一章小说 | `/zhizhang-write 45` |
+| 生成卷+章大纲 | `/zhizhang-plan 1` |
+| 审查已写章节 | `/zhizhang-review 1-10` |
+| 查角色/伏笔状态 | `/zhizhang-query 萧炎` |
+| 写一半中断了 | `/zhizhang-resume` |
+| 手动调大纲 | `/zhizhang-adjust`（调试用） |
+| 看菜单 | `/zhizhang-menu` |
 
-如果你想继续深入：
+---
 
-- [架构与模块](docs/architecture.md)
-- [动态大纲手册](docs/dynamic-outline-guide.md)
-- [命令详解](docs/commands.md)
-- [RAG 与配置](docs/rag-and-config.md)
-- [题材模板](docs/genres.md)
-- [运维与恢复](docs/operations.md)
+## 写作流程（Step 0 → Step 6）
 
-## 命令兼容
+```
+Step 0: 预检（环境/Git/断点）
+Step 1: Context Agent（加载上下文 + 生成任务书）
+Step 2A: 起草（~2000字正文）
+Step 2B: 风格适配（消除模板腔）
+Step 3: 六维审查（核心3并行 + 条件3按需）
+Step 4: 润色 + Anti-AI 检测
+Step 5: Data Agent（实体提取 + 状态落盘）
+Step 5.5A: 动态大纲评估 ← 新增（v5.25）
+Step 5.5B: 动态大纲执行 ← 新增（v5.25）
+Step 6: Git 备份
+```
 
-为了照顾从旧仓库迁移过来的用户，`webnovel-*` 命令在一段过渡期内建议继续保留为兼容别名。
+**速度模式**：
 
-推荐新用户使用：
+| 模式 | 命令 | 耗时 | 适用 |
+|------|------|------|------|
+| 标准 | `/zhizhang-write 45` | ~30分钟 | 重要章节 |
+| `--fast` | `/zhizhang-write 45 --fast` | ~20分钟 | 日常更新 |
+| `--turbo` | `/zhizhang-write 45 --turbo` | ~15分钟 | 赶进度日更 |
 
-- `/zhizhang-init`
-- `/zhizhang-plan`
-- `/zhizhang-write`
-- `/zhizhang-review`
-- `/zhizhang-query`
-- `/zhizhang-dashboard`
-- `/zhizhang-menu`
+---
 
-旧命令示例：
+## 安装
 
-- `/webnovel-init`
-- `/webnovel-plan`
-- `/webnovel-write`
-- `/webnovel-review`
-- `/webnovel-query`
-- `/webnovel-dashboard`
-- `/cnw`
+**前提**：已安装 [Claude Code](https://claude.ai/claude-code)
 
-迁移原则：
+```bash
+# 一键安装
+claude plugin marketplace add qianchongyang/zhizhang-writer --scope user
+claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 
-- 新品牌对外统一为 `织章 / Zhizhang`
-- 旧命令作为兼容入口，逐步迁移，不建议立刻删除
-- 文档、示例、插件元数据优先使用新命名
+# 验证安装
+/zhizhang-menu
+```
+
+**进阶**：
+
+```bash
+# 更新插件
+claude plugin update zhizhang-writer@zhizhang-marketplace --scope user
+
+# 仅当前项目生效（不加 --scope user）
+```
+
+详细说明见 [安装文档](docs/commands.md)。
+
+---
+
+## 快速导航
+
+- [命令详解](docs/commands.md) — 所有命令的场景化说明
+- [动态大纲手册](docs/dynamic-outline-guide.md) — 动态大纲原理与配置
+- [架构文档](docs/architecture.md) — 系统模块设计
+- [运维手册](docs/operations.md) — 索引重建、数据迁移、故障恢复
+- [新手/贡献指南](docs/open-source-guide.md)
+
+---
+
+## 数据文件
+
+```
+PROJECT_ROOT/
+├── .webnovel/
+│   ├── state.json              # 运行时真相（角色/关系/势力/伏笔）
+│   ├── index.db                # SQLite 实体索引
+│   ├── vectors.db              # RAG 向量检索
+│   ├── outline_runtime.json     # 动态大纲运行层（v5.25）
+│   ├── outline_adjustments.jsonl  # 调纲审计记录（v5.25）
+│   └── project_config.json     # 项目配置（可覆盖 default_window_size）
+├── 设定集/                      # 世界观/角色卡/力量体系
+├── 大纲/                       # 总纲/卷纲/章节大纲
+└── 正文/                       # 章节正文
+```
+
+---
 
 ## 最近更新
 
-详细更新请看 [版本变更日志](docs/CHANGELOG.md)。这个仓库会把每次对外可见变更拆成更细的条目，方便后续高频维护。
-
 | 版本 | 说明 |
 |------|------|
-| **v5.24.1 (当前)** | 补齐章节闭环修复、skill 启动兼容与可移植路径，面向新会话/新项目可直接使用 |
-| **v5.24.0** | 新增读者反馈与追读力建议模块 |
+| **v5.25.0** | 动态大纲正式上线：Step 5.5A/5.5B 内嵌到写作主流程，窗口自动评估/扩展/阻断，完整原子性保证 |
+| **v5.24.0** | 读者反馈 + 追读力经营模块 |
+| **v5.23.0** | 健康检查 + 一致性修复 |
 
-最近几个版本的方向：
+完整日志见 [CHANGELOG](docs/CHANGELOG.md)。
 
-- `2026-03-29`：补齐章节闭环修复、skill 启动兼容与可移植路径，面向新会话/新项目可直接使用
-- `2026-03-29`：首页改成 Claude 优先入口，增加快速索引和更细的更新日志规范
-- `v5.23.0`：新增健康检查与一致性修复
+---
 
-## 贡献与边界
+## 适合谁
 
-如果你想贡献代码，先看 [CONTRIBUTING.md](CONTRIBUTING.md)。
+- 长篇连载作者（50 章以上）
+- 需要管理大量设定、人物关系、伏笔的复杂世界观的作者
+- 想在 Claude Code 上搭建自动化写作流水线的开发者
+- 想用 AI 辅助写作但担心"AI 味"和"前后矛盾"的作者
 
-如果你发现安全边界问题，先看 [SECURITY.md](SECURITY.md)。
+**不适合**：短篇（10 章以内）、纯大纲创作、不需要自动审查的写作流程。
 
-## 来源与致谢
+---
 
-- 本项目基于 `lingfengQAQ/webnovel-writer` fork 并二次开发
-- 保留原项目 GPL-3.0 开源协议
-- 感谢原项目的基础实现与灵感来源
+## 命令一览
+
+| 命令 | 用途 |
+|------|------|
+| `/zhizhang-init` | 初始化项目 |
+| `/zhizhang-plan [卷号]` | 生成卷/章大纲 |
+| `/zhizhang-write 章号` | 写一章（核心命令） |
+| `/zhizhang-review 范围` | 审查章节质量 |
+| `/zhizhang-query 关键词` | 查询角色/伏笔/状态 |
+| `/zhizhang-resume` | 恢复中断任务 |
+| `/zhizhang-dashboard` | 可视化面板 |
+| `/zhizhang-menu` | 文字菜单入口 |
+| `/zhizhang-learn` | 提取写作模式 |
+
+---
 
 ## 开源协议
 
-本项目使用 `GPL v3` 协议，详见 `LICENSE`。
+GPL v3 © qianchongyang
+
+基于 [lingfengQAQ/webnovel-writer](https://github.com/lingfengQAQ/webnovel-writer) fork，保留 GPL-3.0 开源协议。
+
+---
+
+## 参与贡献
+
+- [贡献指南](CONTRIBUTING.md)
+- [安全披露](SECURITY.md)
+- [提交规范](docs/commit-rules.md)

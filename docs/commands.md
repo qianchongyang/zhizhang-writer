@@ -1,605 +1,470 @@
-# 从 0 到 100：网文写作全流程指南
+# 织章 Zhizhang Writer — 操作手册
 
-本文档描述如何使用 `织章 Zhizhang Writer` 完成一部长篇网文（200万字量级）。
-
-> 兼容说明：以下仍使用 `webnovel-*` 作为历史命令名；新仓库对外建议逐步迁移到 `zhizhang-*`。
+> **版本**：v5.25.0（动态大纲版）
+> **命令前缀**：`/zhizhang-*` 为对外别名，内部实现委托 `/webnovel-*`
+> **交互入口**：`/zhizhang-menu` 或 `/cnw` 可用文字菜单选择所有功能
 
 ---
 
-## 一、项目初始化
+## 场景导航
 
-### `/webnovel-init`
+遇到问题时，先看这里：
 
-初始化小说项目，创建标准目录结构和状态文件。
+| 你的目标 | 用哪个命令 | 章节 |
+|---------|-----------|------|
+| 写一章小说 | `/zhizhang-write 45` | [场景一](#场景一写小说) |
+| 第一次建新项目 | `/zhizhang-init` | [场景二](#场景二初始化新项目) |
+| 生成卷+章大纲 | `/zhizhang-plan 1` | [场景三](#场景三做大纲规划) |
+| 审查已写章节 | `/zhizhang-review 1-10` | [场景四](#场景四审查章节) |
+| 查角色/伏笔/状态 | `/zhizhang-query 萧炎` | [场景五](#场景五查询状态) |
+| 写了一半中断了 | `/zhizhang-resume` | [场景六](#场景六恢复中断任务) |
+| 手动调大纲/插副本 | `/zhizhang-adjust` | [场景七](#场景七调整大纲) |
+| 只想看菜单 | `/zhizhang-menu` | 任何时候 |
 
-**使用场景：**
-- 第一次开始写新小说时
-- 在一个空目录下建立网文项目时
+---
 
-**执行后产出：**
+## 场景一：写小说
+
+**命令**：`/zhizhang-write 章号 [flags]`
+
+**适用**：每章正式写作，是最常用的命令。
+
+```
+/zhizhang-write 45         # 标准模式，写第45章
+/zhizhang-write 45 --fast  # 快速模式，跳过风格适配
+/zhizhang-write 45 --turbo # Turbo 模式，追求日更速度
+/zhizhang-write 45 --minimal # 极简模式，只做基础检查
+```
+
+### 速度与质量
+
+| 模式 | 速度 | 质量 | 适用场景 |
+|------|------|------|---------|
+| 标准 | ~30分钟 | 最高 | 重要章节、需要存稿 |
+| `--fast` | ~20分钟 | 中高 | 日常更新 |
+| `--turbo` | ~15分钟 | 中 | 赶进度、日更 |
+| `--minimal` | ~10分钟 | 基础 | 草稿测试、快速验证 |
+
+### 标准模式完整流程（Step 0 → Step 6）
+
+```
+Step 0: 预检
+  └─ 检查项目状态、Git 可用性、断点记录
+
+Step 1: Context Agent（构建创作上下文）
+  ├─ 加载 state.json（角色/关系/势力/时间线/伏笔）
+  ├─ 加载本章大纲
+  ├─ 加载前3章摘要
+  ├─ 加载设定集（角色卡/世界观/力量体系）
+  ├─ 生成创作任务书（task_summary + constraints + style_guide）
+  └─ 输出：ctx_ch0045.json（供 Step 2A 直接消费）
+
+Step 2A: 正文起草（~2000-2500字）
+  ├─ 读取 ctx_ch0045.json
+  ├─ 按章型（铺压/对抗/释放）生成正文
+  └─ 输出：正文/第0045章-{标题}.md
+
+Step 2B: 风格适配
+  ├─ 读取 style-adapter.md
+  ├─ 消除模板腔/说明腔/机械腔
+  └─ 输出：覆盖原文件
+
+Step 3: 六维审查（核心3个始终并行 + 条件3个按需）
+  ├─ [始终] consistency-checker  — 战力/地点/时间线/外貌一致性
+  ├─ [始终] continuity-checker   — 场景衔接、叙事连贯
+  ├─ [始终] ooc-checker          — 人物行为是否偏离人设
+  ├─ [按需] reader-pull-checker  — 钩子强度、追读力、说明性对白风险
+  ├─ [按需] high-point-checker  — 爽点密度、质量、期待感
+  └─ [按需] pacing-checker      — Quest/Fire/Constellation 比例
+
+Step 4: 润色修复
+  ├─ critical 问题必须修复
+  ├─ high 问题尽量修复
+  └─ Anti-AI 终检（判断是否像 AI 写的）
+
+Step 5: Data Agent（数据落盘）
+  ├─ B: AI 实体提取（角色/地点/物品/关系）
+  ├─ C: 实体消歧
+  ├─ D: 写入 state.json + index.db
+  ├─ E: 写入章节摘要 summaries/ch0045.md
+  ├─ F: AI 场景切片
+  ├─ G: RAG 向量索引（已配置Embedding时）
+  └─ H: 风格样本（仅 score ≥ 80 时）
+
+Step 5.5A: 动态大纲评估（自动）
+  ├─ 评估当前窗口是否需要调整
+  ├─ 分析插入副本/重排的影响范围
+  └─ 若需要调整 → 进入 Step 5.5B
+
+Step 5.5B: 动态大纲执行（自动）
+  ├─ 扩展活动窗口
+  ├─ 插入铺垫章节
+  └─ 更新 outline_runtime.json + outline_adjustments.jsonl
+  ⚠️ 调纲失败时阻断 Step 6，不产生 Git 提交
+
+Step 6: Git 备份
+  └─ git add . && git commit -m "第45章: {标题}"
+```
+
+### Turbo 模式特殊说明
+
+`--turbo` 模式下：
+- Step 2B（风格适配）跳过
+- Step 4（润色）跳过
+- 核心 3 审查器并行执行（更快）
+- 适合：每日赶更新、不需要精修的章节
+
+### 动态大纲（Step 5.5A/5.5B）
+
+**这是 v5.25.0 的核心新特性**，在 Step 5 完成后自动触发：
+
+- **Step 5.5A 影响分析**：评估后续窗口是否需要插入副本（铺垫章节）、章节重排、活动窗口扩展
+- **Step 5.5B 执行调整**：在影响可接受时自动扩展窗口，同时通过锚点保护确保不偏离主线
+- **失败处理**：调纲失败时 `Step 6 Git 提交` 被阻断，runtime 完整回滚，不产生脏数据
+- **硬上限**：每次扩窗不超过当前窗口的 1.5 倍
+
+**窗口大小**：
+- 默认 25 章（可通过 `.webnovel/project_config.json` 覆盖为其他值）
+- 用户覆盖方式：`{"default_window_size": 30}`
+
+---
+
+## 场景二：初始化新项目
+
+**命令**：`/zhizhang-init`
+
+**适用**：第一次开始写新小说，在空目录下创建完整项目骨架。
+
+```
+/zhizhang-init
+→ 选择题材模板（玄幻/都市/古言等）
+→ 输入：小说名称、简介、核心卖点
+→ 输入：主角名、金手指类型、金手指风格
+→ 输入：女主配置（无/单/多）、反派分层
+→ 生成：完整项目骨架
+```
+
+### 交互流程（6 Steps）
+
+```
+Step 1: 小说基本信息（名称/题材/简介/卖点）
+Step 2: 主角设定（姓名/背景/金手指）
+Step 3: 女主/反派配置
+Step 4: 世界观与力量体系
+Step 5: 生成项目结构
+Step 6: 确认并写入文件
+```
+
+### 初始化产物
+
 ```
 PROJECT_ROOT/
 ├── .webnovel/
-│   ├── state.json                    # 项目状态文件
-│   ├── project_memory.json           # 项目级技巧记忆
-│   ├── story_technique_blueprint.json # 项目技巧蓝图
-│   ├── control/
-│   │   └── chapter_technique_plans/  # 章节技巧编排缓存
-│   └── memory/
-│       └── story_memory.json         # 跨章节故事记忆（含归档层）
+│   ├── state.json              # 运行时状态（空）
+│   ├── project_memory.json     # 项目级技巧记忆
+│   ├── story_technique_blueprint.json  # 题材技巧蓝图
+│   ├── memory/
+│   │   └── story_memory.json   # 跨章节故事记忆
+│   └── control/
+│       └── chapter_technique_plans/
 ├── 设定集/
 │   ├── 世界观.md
-│   ├── 角色模板.md
-│   └── 力量体系.md
-└── 大纲/
-    └── 总纲.md
+│   ├── 力量体系.md
+│   ├── 主角卡.md
+│   ├── 金手指设计.md
+│   └── 角色库/
+├── 大纲/
+│   └── 总纲.md                  # 等待填写
+└── 正文/                        # 等待章节
 ```
 
-**交互流程：**
-```
-/webnovel-init
-→ 输入：小说名称、题材、简介
-→ 生成：项目骨架、状态文件、设定模板
-→ 自动生成：项目技巧蓝图（hook/coolpoint/反模板/行为模型）
-```
+### init 参数（可选）
+
+| 参数 | 说明 |
+|------|------|
+| `--target-words` | 目标总字数（默认 2,000,000） |
+| `--target-chapters` | 目标总章节数（默认 600） |
+| `--protagonist-name` | 主角姓名 |
+| `--golden-finger-name` | 金手指称呼 |
+| `--golden-finger-type` | 金手指类型（系统流/鉴定流/签到流等） |
 
 ---
 
-## 二、建立大纲
+## 场景三：做大纲规划
 
-### `/webnovel-plan [卷号]`
+**命令**：`/zhizhang-plan [卷号]`
 
-生成卷级规划与章节大纲。
-
-**使用场景：**
+**适用**：
 - 写完总纲后，需要细化成具体章节
 - 需要在大规模写作前确定每章的核心情节点
 
-**参数：**
-- `卷号`：指定要规划的卷，如 `/webnovel-plan 1` 或 `/webnovel-plan 2-3`
+```
+/zhizhang-plan 1          # 生成第1卷的完整大纲
+/zhizhang-plan 1-3        # 批量生成第1-3卷大纲
+/zhizhang-plan            # 交互式选择卷范围
+```
 
-**执行后产出：**
+### 流程（8 Steps）
+
+```
+Step 1: 加载项目数据（state.json / 总纲 / 设定集）
+Step 2: 补齐设定集基线（从总纲增量）
+Step 3: 选择卷并确认范围
+Step 4: 生成卷节拍表（节拍表.md）
+Step 4.5: 生成卷时间线表（时间线.md）
+Step 5: 生成卷骨架（Strand Weave / 爽点密度规划）
+Step 6: 批量生成章节大纲（按20章/批）
+Step 7: 回写设定集（增量补充）
+Step 8: 验证 + 保存 + 更新 state.json
+```
+
+### 产出文件
+
 ```
 大纲/
-├── 第1卷.md           # 卷级大纲
-└── 第1卷/
-    ├── 第1章.md
-    ├── 第2章.md
-    └── ...
+├── 第1卷.md              # 卷级大纲
+├── 第1卷-节拍表.md       # 每章节拍点
+├── 第1卷-时间线.md       # 事件时间轴
+└── 第1卷-详细大纲.md     # 章节清单
 ```
-
-**输入：**
-- 总纲.md（已存在）
-- 题材、人设、核心冲突
-
-**输出：**
-- 章节数 × 章节大纲（每章 200-500 字的情节点）
 
 ---
 
-## 三、写作主流程
+## 场景四：审查章节
 
-### `/webnovel-write [章号]`
+**命令**：`/zhizhang-review 范围`
 
-执行完整章节创作流程（上下文 → 草稿 → 审查 → 润色 → 数据落盘）。
-
-**参数：**
-- `章号`：必填，如 `/webnovel-write 1`
-
-**可选 flags：**
-| Flag | 说明 | 适用场景 |
-|------|------|---------|
-| `--fast` | 快速模式，跳过部分审查 | 赶稿、初稿 |
-| `--minimal` | 极简模式，只做基本检查 | 草稿测试 |
-
-**完整流程（标准模式）：**
+**适用**：
+- 写完一批章节后，想了解整体质量
+- 需要找出 continuity / consistency / OOC 问题
+- 需要生成质量报告
 
 ```
-Step 1 - 上下文构建
-  → 写前硬闸门（不通过即中断）：
-      • 本章必须存在可用大纲
-      • 大纲需满足最小章节契约：目标/冲突/动作/结果/代价/钩子
-      • 可选状态变化阈值：`context_min_state_changes_per_chapter`
-  → Context Agent 加载：
-      • 本章大纲
-      • 前3章摘要
-      • 角色状态（外貌/穿着/关系）
-      • 物品状态
-      • 时间线
-      • 项目技巧蓝图（story_technique_blueprint）
-      • 本章追读力策略
-      • 章节技巧编排（chapter_technique_plan）
-
-Step 2 - 草稿生成
-  → 基于大纲和上下文生成 2000-2500 字正文
-  → 优先消费结构化技巧编排：
-      • 章型（铺压 / 对抗 / 释放）
-      • 开篇钩子 / 章中微兑现 / 高潮模式 / 章末钩子
-      • 段落节拍：trigger → reaction → action → result → aftermath
-
-Step 3 - 分组审查
-  → 核心审查器（始终执行）：
-      • consistency-checker：设定一致性（战力/地点/时间线/外貌）
-      • continuity-checker：场景与叙事连贯性
-      • ooc-checker：人物行为是否偏离人设/行为模型
-  → 条件审查器（auto 路由命中时执行）：
-      • reader-pull-checker：钩子强度、期待管理、追读力、说明性对白风险
-      • high-point-checker：爽点密度、质量、兑现后余波
-      • pacing-checker：Strand 比例、断档、信息密度与动作闭环
-
-Step 4 - 润色优化
-  → 根据审查报告针对性优化
-  → 保持人设、修复冲突、增强爽点
-
-Step 5 - 数据落盘（Data Agent）
-  → 状态回写：
-      • 角色状态变化 → state.json
-      • 物品状态变化 → state.json
-      • 场景/地点 → index.db
-      • 势力/门派 → index.db
-      • 章节摘要 → summaries/ch{NNNN}.md
-      • 技巧执行结果 → project_memory.json
-      • 风格样本 → style profiles（仅 score >= 80）
-  → RAG 向量索引（可选，未配置时跳过）
-
-完整工作流（7步）：
-Step 0 → 预检与上下文最小加载
-Step 0.5 → 工作流断点记录
-Step 1 → Context Agent（生成创作执行包）
-Step 1.5 → 主Agent精简上下文加载
-Step 2A → 草稿生成（优先读取 chapter_technique_plan）
-Step 2B → 风格适配（--fast/--minimal 跳过）
-Step 3 → 分组审查（核心3个 + 条件3个）
-Step 4 → 润色（问题修复 + Anti-AI 检测）
-Step 5 → Data Agent（状态、索引、技巧记忆回写）
-Step 6 → Git 备份（若 Git 可用）
+/zhizhang-review 1-5       # 审查第1到5章
+/zhizhang-review 45        # 审查单章
+/zhizhang-review 10-20    # 批量审查
 ```
 
-**写作模式：**
+### 审查维度
 
-| 模式 | 速度 | 质量 | 适用 |
-|------|------|------|------|
-| 标准 | 慢 | 高 | 重要章节、存稿 |
-| `--fast` | 中 | 中 | 日常更新 |
-| `--minimal` | 快 | 低 | 草稿测试 |
+| 审查器 | 始终执行 | 说明 |
+|--------|---------|------|
+| consistency-checker | ✅ | 战力/地点/时间线一致性 |
+| continuity-checker | ✅ | 场景衔接、叙事连贯 |
+| ooc-checker | ✅ | 人物行为是否偏离人设 |
+| reader-pull-checker | 按需 | 钩子强度、追读力 |
+| high-point-checker | 按需 | 爽点密度与质量 |
+| pacing-checker | 按需 | Quest/Fire/Constellation 比例 |
+
+### 输出
+
+- 质量报告：`审查报告/第1-5章审查报告.md`
+- 审查指标写入 `index.db`
+- critical 问题会暂停并询问处理方式
 
 ---
 
-## 四、大纲调整（调试 / 极端修复模式）
+## 场景五：查询状态
 
-> **注意**：`/zhizhang-write` 主流程已内嵌动态大纲能力，常规写作不需要手动调整大纲。只有在调试、极端修复、人工覆盖场景下才需要本命令。
+**命令**：`/zhizhang-query 关键词`
 
-### `/webnovel-adjust`
+**适用**：
+- 写之前查角色当前状态
+- 确认某个伏笔是否已埋下
+- 检查某个物品的当前持有者
 
-大纲调试与人工覆盖命令。用于：
+```
+/zhizhang-query 萧炎           # 查询角色状态
+/zhizhang-query 伏笔           # 查看所有伏笔
+/zhizhang-query 紧急           # 查看紧急伏笔（已到期）
+/zhizhang-query 玄天秘境        # 查询地点信息
+/zhizhang-query 青龙帮          # 查询势力信息
+/zhizhang-query 金手指          # 查询金手指状态
+/zhizhang-query 节奏            # 查看 Strand Weave 比例
+```
+
+---
+
+## 场景六：恢复中断任务
+
+**命令**：`/zhizhang-resume`
+
+**适用**：
+- 写章节时被 Ctrl+C 中断
+- Claude Code 会话意外中断
+- 网络断连导致 API 调用失败
+
+### 恢复流程
+
+```
+Step 1: 检测中断状态（workflow detect）
+Step 2: 展示恢复选项
+  ├─ 选项A：删除重来（推荐）
+  └─ 选项B：Git 回滚
+Step 3: 用户确认
+Step 4: 执行恢复
+Step 5: 继续任务（可选）
+```
+
+---
+
+## 场景七：调整大纲
+
+**命令**：`/zhizhang-adjust`
+
+> **注意**：这是调试/极端修复模式。常规写作不需要此命令，因为动态大纲（Step 5.5A/5.5B）已在 `/zhizhang-write` 内嵌处理。
+
+**适用场景**：
 - 调试：大纲存在逻辑错误需要人工定位
-- 极端修复：数据损坏等需要绕过正常流程的紧急处理
-- 人工覆盖：系统自动处理无法满足的例外情况
+- 极端修复：数据损坏等紧急处理
+- 手动插入复杂副本链（超出自动处理范围）
 
-**不推荐作为常规写作路径的原因：**
-- 动态大纲能力已由 Context Agent 在 `/zhizhang-write` 内嵌处理
-- 审查阶段（Step 3）会自动检测铺垫章节需求
-- 正常写作循环：`/zhizhang-write` → 审查反馈 → 下一章
-- 发现时间线矛盾需要修正
+### 功能
 
-**功能：**
 - 关系铺垫插入（3-5章）
 - 事件铺垫插入（2-3章）
 - 副本扩展（5-10章）
 - 章节重编号（自动更新）
 - 时间线同步
+- 时间逆流/物品凭空出现/倒计时跳跃 检测与修复
 
 ---
 
-## 五、进度审查
+## 附录
 
-### `/webnovel-review [范围]`
+### A. 交互式菜单
 
-对历史章节做多维质量审查，输出质量报告，并汇总技巧执行结果。
+**命令**：`/zhizhang-menu` 或 `/cnw`
 
-**参数：**
-- `范围`：章号范围，如 `/webnovel-review 1-5` 或 `/webnovel-review 45`
-
-**审查分组：**
-
-| 分组 | 审查器 | 说明 |
-|------|--------|------|
-| 核心（始终执行） | consistency-checker | 战力/地点/时间线/外貌一致性 |
-| 核心（始终执行） | continuity-checker | 场景衔接、叙事流畅度 |
-| 核心（始终执行） | ooc-checker | 人物行为是否符合人设 |
-| 条件（auto 命中） | reader-pull-checker | 钩子强度、断章位置、追读力 |
-| 条件（auto 命中） | high-point-checker | 爽点密度、质量、期待感、余波层 |
-| 条件（auto 命中） | pacing-checker | Quest/Fire/Constellation 比例、信息密度 |
-
-**输出示例：**
-```
-章节 45 质量报告
-总分：85/100
-
-[Core] 核心审查器：
-  - consistency: 82/100 - 通过
-  - continuity: 85/100 - 通过
-  - ooc: 90/100 - 通过
-
-[Extended] 条件审查器：
-  - reader-pull: 75/100 - 结尾钩子偏弱，建议增加悬念
-  - high-point: 78/100 - 爽点密度不足
-  - pacing: 71/100 - Quest 占比偏高，感情线偏弱
-
-[Issues] 问题摘要：
-  - critical: 0
-  - high: 1 (时间线轻微不一致)
-  - medium: 2
-
-[Technique] 技巧执行摘要：
-  - applied: hook:悬念钩, coolpoint:身份掉马
-  - signals:
-      dialogue_exposition_risk: false
-      emotion_loop_integrity: true
-      aftermath_presence: true
-```
+文字菜单，可视化程度低的环境下也能用。覆盖所有功能的文字入口。
 
 ---
 
-## 六、信息查询
+### B. 统一 CLI（webnovel.py）
 
-### `/webnovel-query [关键词]`
-
-查询角色、伏笔、节奏、状态等运行时信息。
-
-**使用场景：**
-- 写之前查角色当前状态
-- 确认某个伏笔是否已埋下
-- 检查某个物品的当前持有者
-
-**示例：**
-```bash
-/webnovel-query 萧炎           # 查询角色状态
-/webnovel-query 伏笔           # 查看所有伏笔
-/webnovel-query 紧急            # 查看紧急伏笔（已到期）
-/webnovel-query 玄天秘境        # 查询地点信息
-/webnovel-query 青龙帮          # 查询势力信息
-```
-
----
-
-## 七、任务恢复
-
-### `/webnovel-resume`
-
-任务中断后自动识别断点并恢复。
-
-**使用场景：**
-- 写作被 Ctrl+C 中断
-- Claude Code 会话意外中断
-- 网络断连导致 API 调用失败
-
----
-
-## 八、可视化面板
-
-### `/webnovel-dashboard`
-
-启动只读可视化面板，查看项目状态与写作驾驶舱。
-
-**功能：**
-- 写作驾驶舱首页：本章大纲、高优先级召回、记忆健康、写作建议
-- 记忆与召回页：`story_recall`、`archive_recall`、结构化变化账本
-- 章节列表与进度
-- 角色关系图谱
-- 物品流转记录
-- 时间线可视化
-- 实体统计
-
-**说明：**
-- 默认只读，不会修改项目文件
-- 适合写作决策、排查上下文、实体关系与记忆链路
-
----
-
-## 九、模式学习
-
-### `/webnovel-learn [内容]`
-
-从当前会话或用户输入中提取可复用写作模式。
-
-**使用场景：**
-- 发现某个写作技巧很有效，想复用
-- 需要记录某个成功的情节设计
-
-**示例：**
-```bash
-/webnovel-learn "本章的危机钩设计很有效，悬念拉满"
-/webnovel-learn "主角升级的节奏把控得很好，每3章一个小高潮"
-```
-
----
-
-## 十、自动化批量写作（高级 / 自动化场景）
-
-> **注意**：以下为高级运维命令，面向自动化工作流（日更脚本、CI/CD、无人值守写作）。常规单章节写作请使用 `/zhizhang-write`。
-
-### 批量写作命令
-
-自动化连续执行多章节写作，支持夜间模式、质量门控、断点恢复。
+所有功能也通过 `webnovel.py` 脚本提供，格式：
 
 ```bash
-# 从第10章写到第40章
-python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" \
-  --project-root "/path/to/你的小说项目" \
-  batch run \
-  --from 10 \
-  --to 40
+# 环境校验
+python webnovel.py preflight          # 预检环境
+python webnovel.py where               # 显示项目路径
+
+# 状态报告
+python webnovel.py status --focus all        # 完整健康报告
+python webnovel.py status --focus strand     # 节奏分析
+python webnovel.py status --focus urgency     # 伏笔紧急度
+python webnovel.py status --focus characters  # 角色掉线
+
+# 健康与修复（v5.23）
+python webnovel.py health               # 数据一致性检查
+python webnovel.py repair              # 自动修复不一致
+
+# 读者反馈（v5.24）
+python webnovel.py feedback            # 收集钩子/节奏/OOC/文笔反馈
+
+# 索引管理
+python webnovel.py index process-chapter --chapter 45
+python webnovel.py rag index-chapter --chapter 45
+
+# Git 备份
+python webnovel.py backup "第45章提交"
+
+# 审查合并
+python webnovel.py merge --group1 rev1.json --group2 rev2.json --output merged.json
 ```
 
-### 批量写作参数
+---
 
-| 参数 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `--from` | int | 必填 | 起始章节号 |
-| `--to` | int | 必填 | 结束章节号 |
-| `--night-mode` | flag | 关闭 | 夜间模式（限制 AI 调用次数） |
-| `--max-calls` | int | 1400 | 夜间模式 AI 调用上限 |
-| `--min-quality-score` | float | 75.0 | 最低质量分数阈值（低于此值自动停止） |
+### C. 数据文件说明
 
-### 夜间模式
+| 文件/目录 | 用途 |
+|-----------|------|
+| `.webnovel/state.json` | 运行时真相（角色状态/关系/势力/时间线/伏笔） |
+| `.webnovel/index.db` | SQLite 实体索引（角色/别名/关系/状态变化） |
+| `.webnovel/vectors.db` | SQLite RAG 向量（语义检索） |
+| `.webnovel/outline_runtime.json` | 动态大纲运行层（v5.25 新增） |
+| `.webnovel/outline_adjustments.jsonl` | 动态大纲调整记录（v5.25 新增） |
+| `.webnovel/project_config.json` | 项目级配置（可覆盖 default_window_size） |
+| `.webnovel/summaries/ch*.md` | 章节摘要（供后续章节消费） |
+| `.webnovel/story_memory.json` | 跨章节稳定记忆层 |
+| `.webnovel/project_memory.json` | 项目级技巧记忆 |
+| `.webnovel/workflow_state.json` | 工作流断点记录 |
 
-限制 AI 调用次数，适合夜间无人值守：
+---
 
-```bash
-python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" \
-  --project-root "/path/to/你的小说项目" \
-  batch run \
-  --from 10 \
-  --to 40 \
-  --night-mode \
-  --max-calls 500
-```
+### D. 参数参考
 
-### 断点恢复
+| 参数 | 可用命令 | 用途 |
+|------|---------|------|
+| `--turbo` | write | 跳过风格适配+润色，核心3审查器并行，追求日更速度 |
+| `--fast` | write | 跳过风格适配，标准流程其余步骤完整执行 |
+| `--minimal` | write | 仅核心3审查器，跳过条件审查器 |
+| `--focus strand` | status | Strand Weave 节奏分析 |
+| `--focus urgency` | status | 伏笔紧急度分析 |
+| `--focus characters` | status | 角色掉线分析 |
+| `--focus foreshadowing` | status | 伏笔超时分析 |
+| `--focus pacing` | status | 爽点节奏分布 |
+| `--focus relationships` | status | 人际关系图谱 |
 
-写作中断后，从断点继续：
+---
 
-```bash
-python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" \
-  --project-root "/path/to/你的小说项目" \
-  batch resume
-```
+### E. 质量分数参考
 
-### 质量等级参考
-
-| 分数范围 | 质量等级 | 建议操作 |
-|----------|----------|----------|
+| 分数 | 等级 | 建议操作 |
+|------|------|---------|
 | 90-100 | 优秀 | 可直接发布 |
 | 80-89 | 良好 | 可发布，有少量优化空间 |
 | 70-79 | 中等 | 建议润色后发布 |
 | 60-69 | 较差 | 需要大幅修改 |
 | <60 | 很差 | 建议重写 |
 
-### 批量写作产物
+---
 
-| 产物 | 位置 | 说明 |
-|------|------|------|
-| 章节正文 | `正文/第NNNN章-{标题}.md` | 润色后的可发布章节 |
-| 审查报告 | `审查报告/第NNNN-NNNN章审查报告.md` | 综合审查结果 |
-| 章节摘要 | `.webnovel/summaries/chNNNN.md` | 供后续章节消费的摘要 |
-| 状态文件 | `.webnovel/state.json` | 更新的角色/势力/物品状态 |
-| 索引文件 | `.webnovel/index.db` | 更新的向量索引 |
+### F. 写作驾驶舱（Dashboard）
 
-### 批量写作最佳实践
+**命令**：`/zhizhang-dashboard`
 
-1. **首次批量写作**：先跑 3-5 章测试，观察平均得分和 AI 消耗
-2. **夜间模式**：建议 `--max-calls 500-800`，留有余量
-3. **质量门控**：首次写作建议用默认值 75 分，确认流程稳定后可提高
-4. **定期检查**：每隔 10 章检查一次输出质量
-5. **及时备份**：定期提交 git，保留历史版本
-6. **写前契约检查**：批量前先确认各章大纲具备“目标/冲突/动作/结果/代价/钩子”，避免中途被硬闸门拦截
+只读可视化面板，查看：
+- 写作驾驶舱首页（本章大纲/高优先级召回/记忆健康）
+- 记忆与召回（story_recall / archive_recall）
+- 章节列表与进度
+- 角色关系图谱
+- 物品流转记录
+- 时间线可视化
+- 实体统计
 
-### 常见失败与修复
-
-- 报错：`缺少可用大纲`
-  - 含义：`大纲/` 下未找到对应章节可解析内容
-  - 修复：补齐卷纲或章节大纲后重试
-
-- 报错：`大纲缺少关键项`
-  - 含义：未满足最小章节契约（目标/冲突/动作/结果/代价/钩子）
-  - 修复：在该章大纲中逐项补齐，建议使用 `字段: 内容` 结构
-
-- 报错：`状态变化`
-  - 含义：启用最小状态变化阈值时，可识别状态变化信号不足
-  - 修复：在动作/结果/代价中加入可追踪变化（如“突破/失去/结盟/暴露/受伤/离开”等）
+适合：写作决策前排查上下文、实体关系与记忆链路。
 
 ---
 
-## 十一、工作流程图
+### G. 批量写作（高级）
 
-```
-                    ┌─────────────────┐
-                    │  /webnovel-init │ → 初始化项目
-                    └────────┬────────┘
-                             │
-                             ▼
-              ┌──────────────────────────┐
-              │      /webnovel-plan      │ → 生成卷级大纲
-              └────────────┬─────────────┘
-                           │
-            ┌──────────────┼──────────────┐
-            ▼              ▼              ▼
-     ┌──────────┐   ┌──────────┐   ┌──────────┐
-     │ 第1卷.md │   │ 第2卷.md │   │ 第3卷.md │
-     └────┬─────┘   └────┬─────┘   └────┬─────┘
-          │              │              │
-          ▼              ▼              ▼
-    ┌─────────────────────────────────────────┐
-    │          /webnovel-write [章号]          │ ← 主循环
-    │  ┌────────────────────────────────────┐  │
-    │  │ Step 0: 预检与上下文最小加载       │  │
-    │  │ Step 0.5: 工作流断点记录           │  │
-    │  │ Step 1: Context Agent（创作执行包）│  │
-    │  │ Step 1.5: 精简上下文加载           │  │
-    │  │ Step 2A: 草稿生成                  │  │
-    │  │ Step 2B: 风格适配（可选）          │  │
-    │  │ Step 3: 分组审查（核心3+条件3）    │  │
-    │  │ Step 4: 润色 + Anti-AI 检测       │  │
-    │  │ Step 5: Data Agent（状态回写）     │  │
-    │  │ Step 6: Git 备份                  │  │
-    │  └────────────────────────────────────┘  │
-    └────────────────────┬────────────────────┘
-                         │
-                         ▼
-              ┌─────────────────────┐
-              │  /webnovel-review   │ → 定期审查（每5-10章）
-              │  /webnovel-query    │ → 随时查询
-              │  /webnovel-adjust   │ → 调试/极端修复（不常用）
-              └─────────────────────┘
-```
-
-**写作模式：**
-| 模式 | 速度 | 质量 | 适用 | 步骤 | 审查器 |
-|------|------|------|------|------|--------|
-| 标准 | 慢 | 高 | 重要章节、存稿 | 1→2A→2B→3→4→5→6 | 6个串行 |
-| `--fast` | 中 | 中 | 日常更新 | 1→2A→3→4→5→6 | 6个串行 |
-| `--turbo` (v5.22) | 快 | 中 | 赶稿 | 1→2A→3→5→6 | 核心3个并行 |
-| `--minimal` | 最快 | 低 | 草稿测试 | 1→2A→3→4→5→6 | 核心3个串行 |
-
-### `--turbo` 模式（v5.22）
-
-Turbo 模式跳过润色步骤，核心审查器并行执行，平均耗时下降 ≥50%。
+面向自动化工作流（日更脚本、CI/CD、无人值守）：
 
 ```bash
-/webnovel-write 45 --turbo
+python webnovel.py batch run --from 10 --to 40
+python webnovel.py batch run --from 10 --to 40 --night-mode --max-calls 500
+python webnovel.py batch resume
 ```
 
 ---
 
-## 十四、运维与健康检查（内部 / 专家场景）
+### H. 项目配置文件
 
-> **注意**：以下为内部运维命令，常规写作流程不需要使用。遇到问题时优先查看 `/zhizhang-dashboard`。
+**位置**：`.webnovel/project_config.json`
 
-### 健康检查
+**用途**：覆盖系统默认值
 
-```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" health --chapter 50
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" health --range 1-100
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" health --auto
+```json
+{
+  "default_window_size": 30
+}
 ```
 
-### 一致性修复
-
-```bash
-# 预览修复
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" repair --dry-run
-
-# 执行修复
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" repair --fix
-```
-
-### Git 快照回滚
-
-```bash
-# 查看可用快照
-git tag -l "ch*"
-
-# 回滚到指定章节
-git checkout ch0050
-```
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `default_window_size` | 25 | 动态大纲活动窗口大小（章数） |
 
 ---
 
-## 十五、读者反馈与连载经营
-
-> **注意**：读者反馈已集成到 `/zhizhang-write` 主流程。下方命令为直接操作接口，适用于调试和外部集成场景。
-
-### 添加读者反馈
-
-```bash
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
-  feedback --add --chapter 50 --type "钩子太弱" --content "第三章结尾的钩子不够吸引人"
-```
-
-### 查看反馈
-
-```bash
-# 列出章节反馈
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" feedback --list --chapter 50
-
-# 统计所有反馈
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" feedback --stats
-
-# 获取可操作建议
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" feedback --suggestions
-
-# 查看连载模板
-python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" feedback --templates
-```
-
-### 反馈类型
-
-| 类型 | 说明 |
-|------|------|
-| 钩子太弱 | 章末钩子不够吸引人 |
-| 节奏太慢 | 说明性文字过多，事件密度低 |
-| 角色OOC | 人物行为偏离人设 |
-| 文笔问题 | 总结腔/学术腔过重 |
-| 其他 | 其他类型反馈 |
-
----
-
-## 十二、命令索引
-
-### Skill 命令
-
-| 命令 | 作用 | 使用频率 |
-|------|------|---------|
-| `/webnovel-init` | 初始化项目 | 1次/项目 |
-| `/webnovel-plan [卷号]` | 生成大纲 | 1-3次/卷 |
-| `/webnovel-write [章号]` | 写章节 | 多次/天 |
-| `/webnovel-review [范围]` | 审查质量 | 定期 |
-| `/webnovel-query [关键词]` | 查询信息 | 按需 |
-| `/webnovel-adjust` | 调试/极端修复（不常用） | 极少 |
-| `/webnovel-resume` | 恢复任务 | 按需 |
-| `/webnovel-dashboard` | 可视化面板 | 按需 |
-| `/webnovel-learn [内容]` | 记录模式 | 按需 |
-
-### Unified CLI 子命令（工程/运维层）
-
-统一入口：`python -X utf8 "${CLAUDE_PLUGIN_ROOT}/scripts/webnovel.py" ...`
-
-| 子命令 | 作用 |
-|------|------|
-| `preflight` | 环境与路径预检 |
-| `where` | 解析并输出当前 project_root |
-| `use` | 绑定当前工作区的项目指针 |
-| `index/state/rag/context/style/entity/migrate` | 数据与检索链路操作 |
-| `workflow/status/update-state/backup/archive` | 运维与状态维护脚本转发 |
-| `extract-context` | 导出章节上下文（text/json，受大纲与章节契约硬闸门约束） |
-| `merge` | 合并分组审查结果（`rev1/rev2`） |
-| `health` (v5.23) | 健康检查 |
-| `repair` (v5.23) | 一致性修复 |
-| `feedback` (v5.24) | 读者反馈 |
-
----
-
-## 十三、写作节奏建议
-
-**日常更新（2000-3000字/天）：**
-```bash
-/webnovel-write 45 --fast   # 快速模式写草稿
-/webnovel-review 44-45      # 写完检查上章质量
-/webnovel-query 主角        # 确认状态再写下一章
-```
-
-**周末存稿（5000-10000字/天）：**
-```bash
-/webnovel-write 45          # 标准模式
-/webnovel-write 46
-/webnovel-write 47
-/webnovel-review 45-47     # 批量审查
-```
-
-**阶段总结（每20-30章）：**
-```bash
-/webnovel-review 1-30       # 全面审查前半部分
-/webnovel-dashboard         # 查看整体进度
-/webnovel-learn "这几章的升级节奏把控..."  # 记录成功模式
-```
+*最后更新：v5.25.0*

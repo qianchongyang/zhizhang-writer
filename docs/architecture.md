@@ -42,6 +42,7 @@
 │ Data Layer: state.json / story_memory.json / index.db / vectors.db  │
 │             project_memory.json / story_technique_blueprint.json     │
 │             control/chapter_intents / chapter_technique_plans        │
+│             outline_runtime.json / outline_adjustments.jsonl (v5.25)  │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -304,3 +305,93 @@ python reader_feedback.py --templates
 - 最近 N 章反馈聚合
 - 按类型加权统计
 - 生成追读力风险预警
+
+## v5.25 动态大纲版
+
+**目标**：将大纲调整内嵌到写作主流程，实现"写完一章自动评估后续窗口"。
+
+### 核心改进
+
+| 改进 | 说明 |
+|------|------|
+| Step 5.5A 影响分析 | 写完本章后自动评估后续窗口是否需要调整 |
+| Step 5.5B 动态调纲 | 支持插入副本、章节重排、活动窗口扩展 |
+| 锚点保护机制 | 主线锚点保护，确保调整不偏离主线 |
+| 原子性保证 | Markdown 写回失败时 runtime 完整回滚 |
+| 阻断闸门 | 调纲失败时阻断 Step 6 Git 提交 |
+
+### 动态大纲运行层
+
+新增两个数据文件：
+
+```
+.webnovel/
+├── outline_runtime.json      # 活动窗口运行时状态
+│   ├── active_volume         # 当前卷号
+│   ├── active_window_start   # 窗口起始章节
+│   ├── active_window_end     # 窗口结束章节
+│   ├── window_version        # 窗口版本（JSONL 追加触发）
+│   └── ...
+└── outline_adjustments.jsonl # 每次调整的审计记录
+```
+
+### Step 5.5A / Step 5.5B 流程
+
+```
+Step 5（Data Agent）完成后
+        │
+        ▼
+Step 5.5A: Outline Impact Analyzer
+  ├─ 评估当前窗口是否需要扩展
+  ├─ 分析插入铺垫章节的影响范围
+  ├─ 检查回归主线条件
+  └─ decision: no_change | adjust | block_for_manual_review
+
+        │
+        ▼
+Step 5.5B: Dynamic Outline Agent（当 decision=adjust 时）
+  ├─ 计算新窗口边界
+  ├─ 追加 outline_adjustments.jsonl（触发 window_version 增长）
+  ├─ 原子替换 outline_runtime.json
+  ├─ 更新 Markdown 大纲/时间线
+  └─ 若 Markdown 写回失败 → 完整回滚 runtime
+
+        │
+        ▼
+Step 6: Git 备份（调纲失败时阻断）
+```
+
+### 调纲决策类型
+
+| 决策 | 说明 |
+|------|------|
+| `no_change` | 窗口无需调整 |
+| `adjust` | 触发调纲（扩展/重排/插入） |
+| `block_for_manual_review` | 超限，需人工审查 |
+
+### 副本回归规则
+
+插入铺垫章节（副本）时，必须提供：
+- `mainline_service_reason`：为什么这段副本服务主线
+- `return_to_mainline_by`：计划在第几章回归主线
+
+### 窗口扩展限制
+
+- 每次扩展不超过当前窗口的 **1.5 倍**
+- 硬上限防止无限扩窗
+
+### 项目级配置
+
+| 字段 | 默认值 | 说明 |
+|------|--------|------|
+| `default_window_size` | 25 | 初始活动窗口大小（章数） |
+
+用户可在 `.webnovel/project_config.json` 中覆盖：
+```json
+{ "default_window_size": 30 }
+```
+
+### 与 /zhizhang-adjust 的关系
+
+- `/zhizhang-write` 内嵌的 Step 5.5A/5.5B 处理**常规动态调整**
+- `/zhizhang-adjust` 用于**调试/极端修复**，不推荐常规使用

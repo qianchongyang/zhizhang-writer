@@ -29,6 +29,7 @@ labels: bug
 - Claude Code / 插件版本：
 - 是否使用新命令 `zhizhang-*`：
 - 是否仍在使用兼容命令 `webnovel-*`：
+- 仓库版本或 Release 号：
 
 ## 其他说明
 

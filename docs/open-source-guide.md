@@ -8,10 +8,20 @@
 
 ### 第一步：安装插件
 
+**普通用户直接复制这两条：**
+
 ```bash
-claude plugin marketplace add <YOUR_GITHUB_USERNAME>/zhizhang-writer --scope user
+claude plugin marketplace add qianchongyang/zhizhang-writer --scope user
 claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 ```
+
+你不需要先 clone 仓库，也不需要自己的 GitHub 账号。这里的 GitHub 只是公开发布源，和“开发者维护仓库”不是一回事。
+
+**进阶用户说明：**
+
+- 已安装过旧版本时，执行 `claude plugin update zhizhang-writer@zhizhang-marketplace --scope user`
+- 仅当前项目生效时，把 `--scope user` 改成 `--scope project`
+- `/zhizhang-menu` 可以直接查看当前可用命令和入口
 
 ### 第二步：初始化项目
 
@@ -110,6 +120,10 @@ claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 - `SECURITY.md`
 - `.github/pull_request_template.md`
 
+如果你想让本地提交和发布流程更统一，再补一份：
+
+- `docs/commit-rules.md`
+
 这三份文件能显著减少低质量 PR 和沟通成本。
 
 ---
@@ -127,13 +141,9 @@ claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 - 内部讨论草稿
 - 未整理的临时分析文件
 
-建议把这些内容统一放到 `.gitignore` 已忽略目录中，例如：
+建议把这些内容统一放到 `.gitignore` 已忽略目录中的 `docs/private/`，例如：
 
-- `docs/notes/`
-- `docs/plans/`
 - `docs/private/`
-- `docs/沟通记录/`
-- `docs/个人/`
 
 ---
 

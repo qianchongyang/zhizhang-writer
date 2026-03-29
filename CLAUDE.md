@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目定位
 
-`webnovel-writer` 是基于 Claude Code 的**长篇网文辅助创作系统**，解决 AI 写作中的「遗忘」和「幻觉」问题，支持 200 万字量级连载创作。
+`织章 Zhizhang Writer` 是基于 Claude Code 的**长篇网文辅助创作系统**，解决 AI 写作中的「遗忘」和「幻觉」问题，支持 200 万字量级连载创作。
 
 ## 架构概览
 
@@ -72,14 +72,14 @@ WORKSPACE_ROOT/
 
 | 命令 | 用途 |
 |------|------|
-| `/webnovel-init` | 初始化小说项目（目录、设定模板、状态文件） |
-| `/webnovel-plan [卷号]` | 生成卷级规划与章节大纲 |
-| `/webnovel-write [章号]` | 执行完整章节创作流程（上下文→草稿→审查→润色→数据落盘） |
-| `/webnovel-review [范围]` | 对历史章节做多维质量审查（如 `1-5`、`45`） |
-| `/webnovel-query [关键词]` | 查询角色、伏笔、节奏、状态等运行时信息 |
-| `/webnovel-resume` | 任务中断后自动识别断点并恢复 |
-| `/webnovel-dashboard` | 启动只读可视化面板 |
-| `/webnovel-learn [内容]` | 从当前会话提取可复用写作模式到 project_memory.json |
+| `/zhizhang-init` | 初始化小说项目（目录、设定模板、状态文件） |
+| `/zhizhang-plan [卷号]` | 生成卷级规划与章节大纲 |
+| `/zhizhang-write [章号]` | 执行完整章节创作流程（上下文→草稿→审查→润色→数据落盘） |
+| `/zhizhang-review [范围]` | 对历史章节做多维质量审查（如 `1-5`、`45`） |
+| `/zhizhang-query [关键词]` | 查询角色、伏笔、节奏、状态等运行时信息 |
+| `/zhizhang-resume` | 任务中断后自动识别断点并恢复 |
+| `/zhizhang-dashboard` | 启动只读可视化面板 |
+| `/zhizhang-learn [内容]` | 从当前会话提取可复用写作模式到 project_memory.json |
 
 ## RAG 配置
 
@@ -107,38 +107,37 @@ RERANK_API_KEY=your_rerank_api_key
 
 ```bash
 # 预检（排查 CLI/插件目录/项目根解析问题）
-python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<WORKSPACE_ROOT>" preflight
+python -X utf8 "<CLAUDE_PLUGIN_ROOT>/scripts/zhizhang.py" --project-root "<WORKSPACE_ROOT>" preflight
 
 # 索引重建
-python "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" index process-chapter --chapter 1
+python "<CLAUDE_PLUGIN_ROOT>/scripts/zhizhang.py" --project-root "<PROJECT_ROOT>" index process-chapter --chapter 1
 
 # 向量重建
-python "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" rag index-chapter --chapter 1
+python "<CLAUDE_PLUGIN_ROOT>/scripts/zhizhang.py" --project-root "<PROJECT_ROOT>" rag index-chapter --chapter 1
 
 # 健康报告
-python "<CLAUDE_PLUGIN_ROOT>/scripts/webnovel.py" --project-root "<PROJECT_ROOT>" status -- --focus all
+python "<CLAUDE_PLUGIN_ROOT>/scripts/zhizhang.py" --project-root "<PROJECT_ROOT>" status -- --focus all
 ```
 
-## GitHub PR 更新规则
-
-**重要：提交 PR 合并后，必须自动更新本地小说项目。**
+## 提交代码规则
 
 ### 规则
 
-1. **提交 PR 时**：
+1. **提交前**：
    - 确保 `.gitignore` 包含 `.env`、`*.key`、`credentials.json` 等敏感文件
-   - 在 PR body 中包含变更说明和版本升级信息
+   - 只暂存本次任务需要的文件，不要混入无关本地草稿
+   - 先跑最小验证，再提交
 
-2. **PR 合并后**（自动执行，无需用户确认）：
+2. **提交后 / 合并后**：
    ```bash
-   # 1. 更新本地 webnovel-writer 仓库
-   git checkout master && git pull mine master
+   # 1. 更新本地织章仓库
+   git checkout main && git pull mine main
 
    # 2. 重新安装插件
-   claude plugin install webnovel-writer@qianchongyang/webnovel-writer --scope user --force
+   claude plugin update zhizhang-writer@zhizhang-marketplace --scope user
 
    # 3. 验证插件版本
-   claude plugin list | grep webnovel-writer
+   claude plugin list | grep zhizhang-writer
    ```
 
 3. **版本号升级规则**：

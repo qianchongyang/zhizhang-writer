@@ -8,6 +8,17 @@
 
 本仓库基于 `lingfengQAQ/webnovel-writer` fork 并二次开发，保留 GPL-3.0 开源协议，同时作为独立品牌持续维护。
 
+## 重点能力
+
+**动态大纲**是织章最核心的能力之一。它不是“写完一章后手动改纲”，而是把“评估后续窗口、插入副本、调整节奏、阻断偏航”直接内嵌进 `/zhizhang-write` 主流程。
+
+- 初始化阶段先生成总纲、卷纲和首批章纲
+- 写作阶段每写完一章，自动评估后续窗口是否需要动态调整
+- 遇到副本、关系跃迁、节奏延伸时，自动给出影响预览和调纲决策
+- 调纲失败时会阻断提交，避免把脏状态写进运行层
+
+详细原理和日常用法见：[动态大纲手册](docs/dynamic-outline-guide.md)
+
 ## 快速导航
 
 - [Claude 安装与启动](#claude-安装与启动)
@@ -81,6 +92,7 @@ claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 - 发明需识别，新实体自动入库
 - 双 Agent 协作：Context Agent + Data Agent
 - 六维并行审查：爽点、一致性、节奏、人设、连贯性、追读力
+- 动态大纲：自动评估窗口变化、插入副本、阻断偏航
 - 记忆与召回：状态、伏笔、章节摘要、语义索引
 - Dashboard：只读运行面板，便于排障和复盘
 
@@ -96,6 +108,7 @@ claude plugin install zhizhang-writer@zhizhang-marketplace --scope user
 如果你想继续深入：
 
 - [架构与模块](docs/architecture.md)
+- [动态大纲手册](docs/dynamic-outline-guide.md)
 - [命令详解](docs/commands.md)
 - [RAG 与配置](docs/rag-and-config.md)
 - [题材模板](docs/genres.md)

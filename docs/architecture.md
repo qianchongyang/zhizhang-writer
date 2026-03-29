@@ -227,13 +227,15 @@ AI味惩罚分封顶 = 30分
 
 ### 使用方式
 
+> **说明**：以下为内部运维接口，常规写作流程由 `/zhizhang-write` 自动处理，无需手动调用。
+
 ```bash
-# 健康检查
+# 健康检查（内部运维接口）
 python health_checker.py --chapter 50
 python health_checker.py --range 1-100
 python health_checker.py --auto  # 每10章自动体检
 
-# 一致性修复
+# 一致性修复（内部运维接口）
 python consistency_repair.py --dry-run  # 预览
 python consistency_repair.py --fix       # 执行修复
 ```
@@ -277,20 +279,22 @@ python consistency_repair.py --fix       # 执行修复
 
 ### 使用方式
 
+> **说明**：读者反馈已集成到 `/zhizhang-write` 主流程，下方为底层接口（适用于外部集成或调试场景）。
+
 ```bash
-# 添加反馈
+# 添加反馈（内部接口）
 python reader_feedback.py --add --chapter 50 --type "钩子太弱" --content "第三章结尾的钩子不够吸引人"
 
-# 列出反馈
+# 列出反馈（内部接口）
 python reader_feedback.py --list --chapter 50
 
-# 统计信息
+# 统计信息（内部接口）
 python reader_feedback.py --stats
 
-# 可操作建议
+# 可操作建议（内部接口）
 python reader_feedback.py --suggestions
 
-# 连载模板
+# 连载模板（内部接口）
 python reader_feedback.py --templates
 ```
 

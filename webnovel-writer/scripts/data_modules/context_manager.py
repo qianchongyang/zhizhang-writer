@@ -37,6 +37,7 @@ from .config import get_config
 from .index_manager import IndexManager, WritingChecklistScoreMeta
 from .context_ranker import ContextRanker
 from .snapshot_manager import SnapshotManager, SnapshotVersionMismatch
+from .mainline_anchor_manager import MainlineAnchorManager, create_mainline_anchor_manager
 from .context_weights import (
     DEFAULT_TEMPLATE as CONTEXT_DEFAULT_TEMPLATE,
     TEMPLATE_WEIGHTS as CONTEXT_TEMPLATE_WEIGHTS,
@@ -130,6 +131,43 @@ class ContextManager:
         self.snapshot_manager = snapshot_manager or SnapshotManager(self.config)
         self.index_manager = IndexManager(self.config)
         self.context_ranker = ContextRanker(self.config)
+        self.mainline_anchor_manager: Optional[MainlineAnchorManager] = None
+
+    def _load_mainline_anchors(self, chapter: int) -> Dict[str, Any]:
+        """
+        加载当前章节适用的主线锚点。
+
+        用于动态调纲时确保遵守主线锚点约束。
+        """
+        if self.mainline_anchor_manager is None:
+            try:
+                self.mainline_anchor_manager = create_mainline_anchor_manager(self.config)
+            except Exception as e:
+                logger.warning("Failed to create MainlineAnchorManager: %s", e)
+                return {"anchors": [], "error": str(e)}
+
+        try:
+            # 获取当前章节适用的锚点
+            anchors = self.mainline_anchor_manager.get_anchors_for_chapter(chapter)
+            anchor_dicts = [a.to_dict() for a in anchors]
+
+            # 同时获取卷锚点（如果有卷信息）
+            volume_anchors = []
+            state = self._load_state()
+            volume_num = state.get("project", {}).get("current_volume") or state.get("project_info", {}).get("current_volume")
+            if volume_num:
+                vol_anchors = self.mainline_anchor_manager.get_volume_anchors(int(volume_num))
+                volume_anchors = [a.to_dict() for a in vol_anchors]
+
+            return {
+                "anchors": anchor_dicts,
+                "volume_anchors": volume_anchors,
+                "chapter": chapter,
+                "has_anchors": len(anchor_dicts) > 0,
+            }
+        except Exception as e:
+            logger.warning("Failed to load mainline anchors: %s", e)
+            return {"anchors": [], "error": str(e)}
 
     def _story_memory_path(self) -> Path:
         return getattr(self.config, "story_memory_file", self.config.webnovel_dir / "memory" / "story_memory.json")
@@ -466,6 +504,10 @@ class ContextManager:
             "author_intent": author_intent,
             "current_focus": current_focus,
         }
+
+        # 加载主线锚点（动态调纲时必须读取当前卷主线锚点）
+        mainline_anchors = self._load_mainline_anchors(chapter)
+        memory["mainline_anchors"] = mainline_anchors
         story_skeleton = self._load_story_skeleton(chapter)
         alert_slice = max(0, int(self.config.context_alerts_slice))
         reader_signal = self._load_reader_signal(chapter)

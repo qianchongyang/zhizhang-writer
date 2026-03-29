@@ -1,23 +1,23 @@
 {
-  "name": "webnovel-writer-marketplace",
-  "description": "Marketplace for the webnovel-writer Claude Code plugin.",
+  "name": "zhizhang-marketplace",
+  "description": "Marketplace for the Zhizhang Claude Code plugin.",
   "metadata": {
-    "description": "Marketplace for installing the webnovel-writer plugin."
+    "description": "Marketplace for installing the Zhizhang plugin."
   },
   "owner": {
-    "name": "lingfengQAQ"
+    "name": "qianchongyang"
   },
   "plugins": [
     {
-      "name": "webnovel-writer",
-      "description": "长篇网文创作系统（skills + agents + data chain + RAG）",
+      "name": "zhizhang-writer",
+      "description": "织章：长篇网文创作系统（skills + agents + data chain + RAG）",
       "version": "5.24.0",
       "author": {
-        "name": "lingfengQAQ"
+        "name": "qianchongyang"
       },
       "source": "./webnovel-writer",
       "category": "productivity",
-      "homepage": "https://github.com/lingfengQAQ/webnovel-writer"
+      "homepage": "https://github.com/qianchongyang/zhizhang-writer"
     }
   ]
 }

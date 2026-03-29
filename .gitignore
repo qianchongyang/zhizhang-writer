@@ -1,4 +1,7 @@
 .claude/settings.local.json
+.claude/
+.serena/
+AGENTS.md
 
 # Environment and secrets
 .env
@@ -61,3 +64,7 @@ docs/superpowers/
 docs/沟通记录/
 docs/个人/
 docs/.private/
+docs/private/
+docs/chat/
+docs/transcripts/
+docs/communications/

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-webnovel 统一入口脚本（无须 `cd`）
+webnovel 统一入口脚本（兼容层，无须 `cd`）
 
 用法示例：
   python "<SCRIPTS_DIR>/webnovel.py" preflight

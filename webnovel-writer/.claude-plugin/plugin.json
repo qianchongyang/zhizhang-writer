@@ -1,14 +1,15 @@
 {
-  "name": "webnovel-writer",
+  "name": "zhizhang-writer",
   "version": "5.24.0",
-  "description": "长篇网文创作系统（skills + agents + data chain + RAG）",
+  "description": "织章：长篇网文创作系统（skills + agents + data chain + RAG）",
   "author": {
-    "name": "lingfengQAQ"
+    "name": "qianchongyang"
   },
-  "homepage": "https://github.com/lingfengQAQ/webnovel-writer",
-  "repository": "https://github.com/lingfengQAQ/webnovel-writer",
+  "homepage": "https://github.com/qianchongyang/zhizhang-writer",
+  "repository": "https://github.com/qianchongyang/zhizhang-writer",
   "license": "GPL-3.0",
   "keywords": [
+    "zhizhang",
     "webnovel",
     "claude-code",
     "skills",

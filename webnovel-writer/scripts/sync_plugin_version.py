@@ -11,7 +11,8 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 PLUGIN_JSON_PATH = ROOT / "webnovel-writer" / ".claude-plugin" / "plugin.json"
 MARKETPLACE_JSON_PATH = ROOT / ".claude-plugin" / "marketplace.json"
 README_PATH = ROOT / "README.md"
-PLUGIN_NAME = "webnovel-writer"
+PLUGIN_NAME = "zhizhang-writer"
+LEGACY_PLUGIN_NAME = "webnovel-writer"
 VERSION_PATTERN = re.compile(r"^\d+\.\d+\.\d+$")
 README_ROW_PATTERN = re.compile(
     r"^\| \*\*v(?P<version>[^\s*]+)(?P<current> \(当前\))?\*\* \| (?P<notes>.*) \|$"
@@ -43,6 +44,9 @@ def get_marketplace_plugin(payload: dict[str, Any]) -> dict[str, Any]:
     plugins = payload.get("plugins", [])
     for plugin in plugins:
         if plugin.get("name") == PLUGIN_NAME:
+            return plugin
+    for plugin in plugins:
+        if plugin.get("name") == LEGACY_PLUGIN_NAME:
             return plugin
     raise ValueError(f"Plugin {PLUGIN_NAME} not found in marketplace.json")
 

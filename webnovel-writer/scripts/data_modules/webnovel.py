@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-webnovel 统一入口（面向 skills / agents 的稳定 CLI）
+webnovel / zhizhang 统一入口（面向 skills / agents 的稳定 CLI）
 
 设计目标：
 - 只有一个入口命令，避免到处拼 `python -m data_modules.xxx ...` 导致参数位置/引号/路径炸裂。
@@ -37,6 +37,34 @@ from project_locator import resolve_project_root, write_current_project_pointer,
 def _scripts_dir() -> Path:
     # data_modules/webnovel.py -> data_modules -> scripts
     return Path(__file__).resolve().parent.parent
+
+
+def _find_skill_root(plugin_root: Path) -> Path:
+    """
+    优先识别新品牌技能目录，兼容旧目录。
+    """
+    candidates = [
+        plugin_root / "skills" / "zhizhang-write",
+        plugin_root / "skills" / "webnovel-write",
+    ]
+    for candidate in candidates:
+        if candidate.is_dir():
+            return candidate
+    return candidates[-1]
+
+
+def _find_entry_script(scripts_dir: Path) -> Path:
+    """
+    优先识别新品牌入口脚本，兼容旧入口。
+    """
+    candidates = [
+        scripts_dir / "zhizhang.py",
+        scripts_dir / "webnovel.py",
+    ]
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    return candidates[-1]
 
 
 def _resolve_root(explicit_project_root: Optional[str]) -> Path:
@@ -240,8 +268,8 @@ def cmd_batch_write(args: argparse.Namespace) -> int:
 def _build_preflight_report(explicit_project_root: Optional[str]) -> dict:
     scripts_dir = _scripts_dir().resolve()
     plugin_root = scripts_dir.parent
-    skill_root = plugin_root / "skills" / "webnovel-write"
-    entry_script = scripts_dir / "webnovel.py"
+    skill_root = _find_skill_root(plugin_root)
+    entry_script = _find_entry_script(scripts_dir)
     extract_script = scripts_dir / "extract_chapter_context.py"
 
     checks: list[dict[str, object]] = [
@@ -318,7 +346,7 @@ def cmd_use(args: argparse.Namespace) -> int:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="webnovel unified CLI")
+    parser = argparse.ArgumentParser(description="zhizhang/webnovel unified CLI")
     parser.add_argument("--project-root", help="书项目根目录或工作区根目录（可选，默认自动检测）")
 
     sub = parser.add_subparsers(dest="tool", required=True)

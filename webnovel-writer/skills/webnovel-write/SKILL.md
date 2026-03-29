@@ -533,7 +533,12 @@ python3 -X utf8 "${SCRIPTS_DIR}/data_modules/outline_contract_validator.py" \
 **失败/降级时**：
 - 不更新 `outline_runtime`
 - 记录告警到 `observability/dynamic_outline_warnings.jsonl`
-- 继续执行后续步骤（不影响章节写作流程）
+- 调用 `workflow_manager.set_outline_blocked()` 标记阻断状态
+- **Step 6 被锁定，不得自动进入 Git 备份**
+
+**阻断恢复**：
+- 只有在 5.5A/5.5B 重新成功完成后，调用 `workflow_manager.clear_outline_blocked()` 解除阻断
+- 或者用户手动清理任务状态
 
 ### Step 6：Git 备份（可失败但需说明）
 

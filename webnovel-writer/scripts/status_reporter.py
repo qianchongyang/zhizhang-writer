@@ -86,9 +86,18 @@ from pathlib import Path
 from typing import Dict, List, Any, Tuple, Optional
 from datetime import datetime
 from collections import defaultdict
-from project_locator import resolve_project_root
-from chapter_paths import extract_chapter_num_from_filename
-from runtime_compat import enable_windows_utf8_stdio
+try:
+    from project_locator import resolve_project_root
+except ImportError:
+    from scripts.project_locator import resolve_project_root
+try:
+    from chapter_paths import extract_chapter_num_from_filename
+except ImportError:
+    from scripts.chapter_paths import extract_chapter_num_from_filename
+try:
+    from runtime_compat import enable_windows_utf8_stdio
+except ImportError:
+    from scripts.runtime_compat import enable_windows_utf8_stdio
 
 # 导入配置
 try:

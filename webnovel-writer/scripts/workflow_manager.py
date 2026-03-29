@@ -19,10 +19,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from chapter_paths import default_chapter_draft_path, find_chapter_file
-from project_locator import resolve_project_root
-from runtime_compat import enable_windows_utf8_stdio, normalize_windows_path
-from security_utils import atomic_write_json, create_secure_directory
+try:
+    from chapter_paths import default_chapter_draft_path, find_chapter_file
+except ImportError:
+    from scripts.chapter_paths import default_chapter_draft_path, find_chapter_file
+try:
+    from project_locator import resolve_project_root
+except ImportError:
+    from scripts.project_locator import resolve_project_root
+try:
+    from runtime_compat import enable_windows_utf8_stdio, normalize_windows_path
+except ImportError:
+    from scripts.runtime_compat import enable_windows_utf8_stdio, normalize_windows_path
+try:
+    from security_utils import atomic_write_json, create_secure_directory
+except ImportError:
+    from scripts.security_utils import atomic_write_json, create_secure_directory
 
 
 logger = logging.getLogger(__name__)

@@ -39,13 +39,22 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
-from runtime_compat import enable_windows_utf8_stdio
+try:
+    from runtime_compat import enable_windows_utf8_stdio
+except ImportError:
+    from scripts.runtime_compat import enable_windows_utf8_stdio
 
 # ============================================================================
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
-from security_utils import create_secure_directory, atomic_write_json
-from project_locator import resolve_project_root
+try:
+    from security_utils import create_secure_directory, atomic_write_json
+except ImportError:
+    from scripts.security_utils import create_secure_directory, atomic_write_json
+try:
+    from project_locator import resolve_project_root
+except ImportError:
+    from scripts.project_locator import resolve_project_root
 
 # v5.1 引入: 使用 IndexManager 读取实体
 try:

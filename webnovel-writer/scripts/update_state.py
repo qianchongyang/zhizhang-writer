@@ -50,15 +50,24 @@ import argparse
 import shutil
 from pathlib import Path
 
-from runtime_compat import enable_windows_utf8_stdio
+try:
+    from runtime_compat import enable_windows_utf8_stdio
+except ImportError:
+    from scripts.runtime_compat import enable_windows_utf8_stdio
 from datetime import datetime
 from typing import Dict, Any, Optional
 
 # ============================================================================
 # 安全修复：导入安全工具函数（P1 MEDIUM）
 # ============================================================================
-from security_utils import create_secure_directory, atomic_write_json, restore_from_backup
-from project_locator import resolve_state_file
+try:
+    from security_utils import create_secure_directory, atomic_write_json, restore_from_backup
+except ImportError:
+    from scripts.security_utils import create_secure_directory, atomic_write_json, restore_from_backup
+try:
+    from project_locator import resolve_state_file
+except ImportError:
+    from scripts.project_locator import resolve_state_file
 from data_modules.state_validator import (
     normalize_foreshadowing_status,
     normalize_state_runtime_sections,

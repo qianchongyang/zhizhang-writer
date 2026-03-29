@@ -22,13 +22,22 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from runtime_compat import enable_windows_utf8_stdio
+try:
+    from runtime_compat import enable_windows_utf8_stdio
+except ImportError:
+    from scripts.runtime_compat import enable_windows_utf8_stdio
 from typing import Any, Dict, List
 import re
 
 # 安全修复：导入安全工具函数
-from security_utils import sanitize_commit_message, atomic_write_json, is_git_available
-from project_locator import write_current_project_pointer
+try:
+    from security_utils import sanitize_commit_message, atomic_write_json, is_git_available
+except ImportError:
+    from scripts.security_utils import sanitize_commit_message, atomic_write_json, is_git_available
+try:
+    from project_locator import write_current_project_pointer
+except ImportError:
+    from scripts.project_locator import write_current_project_pointer
 from data_modules.technique_blueprint import (
     ensure_story_technique_blueprint,
     load_project_memory,

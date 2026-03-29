@@ -20,13 +20,23 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-from chapter_outline_loader import (
-    is_missing_chapter_outline,
-    load_chapter_outline,
-    validate_chapter_contract,
-)
+try:
+    from chapter_outline_loader import (
+        is_missing_chapter_outline,
+        load_chapter_outline,
+        validate_chapter_contract,
+    )
+except ImportError:
+    from scripts.chapter_outline_loader import (
+        is_missing_chapter_outline,
+        load_chapter_outline,
+        validate_chapter_contract,
+    )
 
-from runtime_compat import enable_windows_utf8_stdio
+try:
+    from runtime_compat import enable_windows_utf8_stdio
+except ImportError:
+    from scripts.runtime_compat import enable_windows_utf8_stdio
 
 try:
     from chapter_paths import find_chapter_file

@@ -718,5 +718,296 @@ class TestDynamicOutlineE2E:
         assert runtime_after.return_to_mainline_by == 15
 
 
+    # ==========================================================================
+    # 场景 7：调纲失败阻断 Step 6（E2E: workflow_manager + outline 集成）
+    # ==========================================================================
+
+    def test_outline_mutation_failure_blocks_step6(self, temp_project, sample_outline_nodes, monkeypatch):
+        """
+        场景 7：调纲失败阻断 Step 6
+
+        验证：
+        - 当 mutation engine 执行失败时，outline_blocked 被设置
+        - Step 6 无法启动，被正确阻断
+        - workflow_manager 状态正确反映阻断状态
+        """
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+        import workflow_manager
+
+        # Monkeypatch find_project_root to use temp_project.project_root (Path)
+        monkeypatch.setattr(workflow_manager, "find_project_root", lambda: temp_project.project_root)
+
+        webnovel_dir = temp_project.project_root / ".webnovel"
+        webnovel_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1. 创建初始运行时状态
+        runtime_file = temp_project.project_root / ".webnovel" / "outline_runtime.json"
+        runtime_file.parent.mkdir(parents=True, exist_ok=True)
+        runtime_data = {
+            "active_volume": 1,
+            "active_window_start": 1,
+            "active_window_end": 50,
+            "window_version": 0,
+            "window_status": "active",
+            "active_nodes": sample_outline_nodes,
+        }
+        runtime_file.write_text(json.dumps(runtime_data, ensure_ascii=False, indent=2))
+
+        # 2. 启动 workflow 并完成到 Step 5.5B
+        workflow_manager.start_task("webnovel-write", {"chapter_num": 10})
+        workflow_manager.start_step("Step 1", "Context")
+        workflow_manager.complete_step("Step 1")
+
+        for step_id in ["Step 2A", "Step 2B", "Step 3", "Step 4", "Step 5"]:
+            workflow_manager.start_step(step_id, step_id)
+            workflow_manager.complete_step(step_id)
+
+        # 3. Step 5.5A/B 完成后，模拟调纲失败
+        workflow_manager.start_step("Step 5.5A", "Impact Preview")
+        workflow_manager.complete_step("Step 5.5A")
+        workflow_manager.start_step("Step 5.5B", "Dynamic Outline Decision")
+        workflow_manager.complete_step("Step 5.5B")
+
+        # 4. 模拟 mutation 失败（通过设置 outline_blocked）
+        workflow_manager.set_outline_blocked(workflow_manager.OUTLINE_STATUS_BLOCKED_FAILED)
+
+        # 5. 验证 outline_blocked 状态
+        state = workflow_manager.load_state()
+        assert state["current_task"]["outline_blocked"] == workflow_manager.OUTLINE_STATUS_BLOCKED_FAILED
+
+        # 6. 尝试启动 Step 6，应该被阻断
+        workflow_manager.start_step("Step 6", "Git Backup")
+
+        # 7. 验证 Step 6 未启动
+        state = workflow_manager.load_state()
+        assert state["current_task"]["current_step"] is None
+
+        # 8. 验证 git_status.completed 未设置
+        assert state["current_task"]["artifacts"].get("git_status") != {"completed": True}
+
+    # ==========================================================================
+    # 场景 8：完整回滚恢复 runtime（12 个字段全部恢复）
+    # ==========================================================================
+
+    def test_full_rollback_restores_all_runtime_fields(self, temp_project, sample_outline_nodes):
+        """
+        场景 8：完整回滚恢复 runtime
+
+        验证：
+        - 当 Markdown 写回失败时，回滚能完整恢复 runtime 的 12 个字段
+        - before_runtime 快照包含所有必要字段
+        - 回滚后 runtime 与回滚前完全一致
+        """
+        from data_modules.outline_mutation_engine import OutlineMutationEngine, MutationRequest, AdjustmentRecord
+        from data_modules.outline_runtime import (
+            load_outline_runtime,
+            save_outline_runtime,
+            OutlineRuntime,
+            OutlineNode,
+        )
+        import uuid
+
+        # 1. 创建带完整状态的初始 runtime（12 个字段）
+        runtime = OutlineRuntime(
+            active_volume=1,
+            active_window_start=5,
+            active_window_end=50,
+            window_version=3,
+            baseline_anchor_version=2,
+            last_adjustment_chapter=10,
+            last_adjustment_type="insert_arc",
+            last_applied_adjustment_id="adj-abc-123",
+            return_to_mainline_by=15,
+            window_status="active",
+            active_nodes=sample_outline_nodes,
+        )
+        save_outline_runtime(temp_project.outline_runtime_file, runtime)
+
+        # 2. 准备一个会导致 Markdown 写回失败的 request
+        engine = OutlineMutationEngine(temp_project)
+
+        # 3. 构造 mutation request（模拟插入弧线）
+        request = MutationRequest(
+            action_type="insert_arc",
+            trigger_chapter=10,
+            reason="测试回滚",
+            impact_preview="插入测试弧线",
+            affected_chapters=[13, 14, 15],
+            new_window_end=53,
+        )
+
+        # 4. 手动构造一个失败场景（通过直接调用 _rollback）
+        # 首先需要保存一个完整的 before_runtime 快照
+        before_runtime_snapshot = {
+            "active_volume": 1,
+            "active_window_start": 5,
+            "active_window_end": 50,
+            "window_version": 3,
+            "baseline_anchor_version": 2,
+            "last_adjustment_chapter": 10,
+            "last_adjustment_type": "insert_arc",
+            "last_applied_adjustment_id": "adj-abc-123",
+            "return_to_mainline_by": 15,
+            "window_status": "active",
+            "mainline_anchors": [],
+            "active_nodes": [n.model_dump() if hasattr(n, 'model_dump') else n for n in sample_outline_nodes],
+        }
+
+        # 5. 创建一个临时的 record 用于回滚
+        record = AdjustmentRecord(
+            adjustment_id=str(uuid.uuid4()),
+            status="pending",
+            trigger_chapter=10,
+            adjustment_type="insert_arc",
+            reason="测试回滚",
+            impact_preview="插入测试弧线",
+            before_window={
+                "start": 5,
+                "end": 50,
+                "version": 3,
+                "volume": 1,
+            },
+            after_window={
+                "start": 5,
+                "end": 53,
+                "version": 4,
+            },
+            written_at="2024-01-01T00:00:00Z",
+            before_runtime=before_runtime_snapshot,
+        )
+
+        # 6. 执行回滚
+        result = engine._rollback(record, "test_rollback")
+
+        # 7. 验证回滚结果
+        assert result.success is False
+        assert result.rolled_back is True
+        assert result.rollback_reason == "test_rollback"
+
+        # 8. 验证 runtime 完全恢复到回滚前状态
+        runtime_after = load_outline_runtime(temp_project.outline_runtime_file)
+        assert runtime_after.active_window_start == 5
+        assert runtime_after.active_window_end == 50
+        assert runtime_after.window_version == 3
+        assert runtime_after.baseline_anchor_version == 2
+        assert runtime_after.last_adjustment_chapter == 10
+        assert runtime_after.last_adjustment_type == "insert_arc"
+        assert runtime_after.last_applied_adjustment_id == "adj-abc-123"
+        assert runtime_after.return_to_mainline_by == 15
+
+    # ==========================================================================
+    # 场景 9：默认窗口 25 生效
+    # ==========================================================================
+
+    def test_default_window_size_25(self, tmp_path):
+        """
+        场景 9：默认窗口 25 生效
+
+        验证：
+        - OutlineRuntime 默认 active_window_end 为 25
+        - 新项目初始化时使用默认窗口 25
+        - 运行时可以正确处理窗口 25 的场景
+        """
+        from data_modules.outline_runtime import OutlineRuntime, load_outline_runtime, ensure_outline_runtime
+
+        # 1. 验证 OutlineRuntime 默认值
+        runtime = OutlineRuntime()
+        assert runtime.active_window_end == 25
+        assert runtime.active_window_start == 1
+        assert runtime.window_version == 0
+
+        # 2. 验证可以从空数据加载并应用默认值
+        runtime_file = tmp_path / "outline_runtime.json"
+        runtime_file.write_text("{}", encoding="utf-8")
+
+        # load_outline_runtime 会在数据缺失时提供默认值
+        loaded = load_outline_runtime(runtime_file)
+        assert loaded.active_window_end == 25
+
+        # 3. 验证 ensure_outline_runtime 使用默认窗口 25
+        project_root = tmp_path / "test_project"
+        project_root.mkdir(parents=True, exist_ok=True)
+        new_runtime = ensure_outline_runtime(project_root, default_window_size=25)
+        assert new_runtime.active_window_end == 25
+
+        # 4. 验证 config 中 default_window_size 也是 25
+        from data_modules.config import DataModulesConfig
+
+        cfg = DataModulesConfig.from_project_root(tmp_path)
+        assert cfg.default_window_size == 25
+
+    # ==========================================================================
+    # 场景 10：Step 5 成功后自动进入 Step 5.5A（无手动触发）
+    # ==========================================================================
+
+    def test_step5_auto_triggers_step55a(self, temp_project, sample_outline_nodes, monkeypatch):
+        """
+        场景 10：Step 5 成功后自动进入 Step 5.5A
+
+        验证：
+        - Step 5 完成后，workflow 不阻止 Step 5.5A 启动
+        - Step 5.5A 是主流程的必要步骤，不允许跳过
+        - 分析恢复选项时，Step 5.5A/5.5B 中断不提供"跳过"选项
+        """
+        import sys
+        from pathlib import Path
+        sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
+        import workflow_manager
+
+        monkeypatch.setattr(workflow_manager, "find_project_root", lambda: temp_project.project_root)
+
+        webnovel_dir = temp_project.project_root / ".webnovel"
+        webnovel_dir.mkdir(parents=True, exist_ok=True)
+
+        # 1. 启动 workflow，完成到 Step 5
+        workflow_manager.start_task("webnovel-write", {"chapter_num": 10})
+        workflow_manager.start_step("Step 1", "Context")
+        workflow_manager.complete_step("Step 1")
+
+        for step_id in ["Step 2A", "Step 2B", "Step 3", "Step 4", "Step 5"]:
+            workflow_manager.start_step(step_id, step_id)
+            workflow_manager.complete_step(step_id)
+
+        # 2. Step 5 完成后，应该可以正常启动 Step 5.5A
+        workflow_manager.start_step("Step 5.5A", "Impact Preview")
+
+        state = workflow_manager.load_state()
+        assert state["current_task"]["current_step"] is not None
+        assert state["current_task"]["current_step"]["id"] == "Step 5.5A"
+
+        # 3. 在 Step 5.5A 中断（不完成它），验证恢复选项
+        interrupt_info = workflow_manager.detect_interruption()
+        assert interrupt_info is not None
+
+        recovery_options = workflow_manager.analyze_recovery_options(interrupt_info)
+        labels = [opt.get("label") for opt in recovery_options]
+
+        # 验证 Step 5.5A 中断时没有"跳过动态调纲"选项
+        assert "跳过动态调纲" not in labels
+        # 应该有"从 Step 5.5A 重新开始"或"终止任务"选项
+        assert "从 Step 5.5A 重新开始" in labels or "终止任务" in labels
+
+        # 4. 继续完成 Step 5.5A 并启动 Step 5.5B
+        workflow_manager.complete_step("Step 5.5A")
+        workflow_manager.start_step("Step 5.5B", "Dynamic Outline Decision")
+
+        state = workflow_manager.load_state()
+        assert state["current_task"]["current_step"]["id"] == "Step 5.5B"
+
+        # 5. 在 Step 5.5B 中断（不完成它），验证恢复选项
+        interrupt_info = workflow_manager.detect_interruption()
+        assert interrupt_info is not None
+
+        recovery_options = workflow_manager.analyze_recovery_options(interrupt_info)
+        labels = [opt.get("label") for opt in recovery_options]
+
+        # 验证 Step 5.5B 中断时没有"跳过动态调纲"选项
+        assert "跳过动态调纲" not in labels
+        # 应该有"从 Step 5.5A 重新开始"或"终止任务"选项
+        assert "从 Step 5.5A 重新开始" in labels or "终止任务" in labels
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

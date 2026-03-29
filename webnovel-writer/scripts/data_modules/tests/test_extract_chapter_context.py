@@ -613,3 +613,144 @@ def test_ensure_chapter_outline_exists_raises_state_change_error_when_required(t
         ensure_chapter_outline_exists(tmp_path, 1, require_contract=True, min_state_changes=1)
 
     assert "状态变化" in str(exc_info.value)
+
+
+# ============================================================
+# Task 8: 动态大纲错误分流测试
+# ============================================================
+
+
+def test_detect_outline_missing_reason_when_runtime_exists_but_node_missing(tmp_path):
+    """
+    场景: outline_runtime.json 存在但当前章节节点缺失
+    预期行为: _detect_outline_missing_reason() 返回 "runtime_exists_but_node_missing"
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    from extract_chapter_context import _detect_outline_missing_reason
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+    # 创建 outline_runtime.json，但不包含第99章的节点
+    (webnovel_dir / "outline_runtime.json").write_text(
+        json.dumps({
+            "volume": 1,
+            "nodes": [
+                {"chapter": 1, "title": "第1章", "goal": "测试", "conflict": "冲突", "action": "动作", "result": "结果", "cost": "代价", "hook": "钩子"}
+            ]
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    reason, hint = _detect_outline_missing_reason(tmp_path, 99)
+    assert reason == "runtime_exists_but_node_missing"
+    assert "动态窗口" in hint
+
+
+def test_detect_outline_missing_reason_when_volume_exists_but_chapter_missing(tmp_path):
+    """
+    场景: 卷详细大纲存在但当前章节条目缺失
+    预期行为: _detect_outline_missing_reason() 返回 "volume_exists_but_chapter_missing"
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    from extract_chapter_context import _detect_outline_missing_reason
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+    # 不创建 outline_runtime.json
+    outline_dir = tmp_path / "大纲"
+    outline_dir.mkdir(parents=True, exist_ok=True)
+    # 创建卷详细大纲，但只包含第1章
+    # 注意：chapter 99 会映射到 volume 2 (51-100)
+    (outline_dir / "第2卷-详细大纲.md").write_text(
+        "### 第1章：测试章节\n目标：测试\n冲突：冲突\n动作：动作\n结果：结果\n代价：代价\n钩子：钩子",
+        encoding="utf-8",
+    )
+
+    reason, hint = _detect_outline_missing_reason(tmp_path, 99)
+    assert reason == "volume_exists_but_chapter_missing"
+    assert "计划窗口" in hint
+
+
+def test_detect_outline_missing_reason_when_no_outline_file(tmp_path):
+    """
+    场景: 大纲文件完全不存在
+    预期行为: _detect_outline_missing_reason() 返回 "no_outline_file"
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    from extract_chapter_context import _detect_outline_missing_reason
+
+    # 不创建任何大纲文件
+    reason, hint = _detect_outline_missing_reason(tmp_path, 1)
+    assert reason == "no_outline_file"
+    assert "大纲文件不存在" in hint
+
+
+def test_ensure_chapter_outline_exists_error_message_for_dynamic_window_failure(tmp_path):
+    """
+    场景: outline_runtime.json 存在但当前章节节点缺失
+    预期行为: ensure_chapter_outline_exists() 抛出 ValueError，消息包含 "动态窗口未生成"
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    import pytest
+    from extract_chapter_context import ensure_chapter_outline_exists
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+    # 创建 outline_runtime.json，但不包含第99章的节点
+    (webnovel_dir / "outline_runtime.json").write_text(
+        json.dumps({
+            "volume": 1,
+            "nodes": [
+                {"chapter": 1, "title": "第1章", "goal": "测试", "conflict": "冲突", "action": "动作", "result": "结果", "cost": "代价", "hook": "钩子"}
+            ]
+        }, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        ensure_chapter_outline_exists(tmp_path, 99)
+
+    error_msg = str(exc_info.value)
+    assert "动态窗口未生成" in error_msg or "缺少可用大纲" in error_msg
+
+
+def test_ensure_chapter_outline_exists_error_message_for_plan_window_failure(tmp_path):
+    """
+    场景: 卷详细大纲存在但当前章节条目缺失
+    预期行为: ensure_chapter_outline_exists() 抛出 ValueError，消息包含 "计划窗口未覆盖"
+    """
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+
+    import pytest
+    from extract_chapter_context import ensure_chapter_outline_exists
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+    outline_dir = tmp_path / "大纲"
+    outline_dir.mkdir(parents=True, exist_ok=True)
+    # 创建卷详细大纲，但只包含第1章
+    # 注意：chapter 99 会映射到 volume 2 (51-100)
+    (outline_dir / "第2卷-详细大纲.md").write_text(
+        "### 第1章：测试章节\n目标：测试\n冲突：冲突\n动作：动作\n结果：结果\n代价：代价\n钩子：钩子",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        ensure_chapter_outline_exists(tmp_path, 99)
+
+    error_msg = str(exc_info.value)
+    assert "计划窗口未覆盖" in error_msg or "缺少可用大纲" in error_msg

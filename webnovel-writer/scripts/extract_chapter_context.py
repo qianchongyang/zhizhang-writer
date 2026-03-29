@@ -72,6 +72,64 @@ def extract_chapter_outline(project_root: Path, chapter_num: int) -> str:
     return load_chapter_outline(project_root, chapter_num, max_chars=1500)
 
 
+def _detect_outline_missing_reason(project_root: Path, chapter_num: int) -> tuple[str, str]:
+    """
+    检测大纲缺失的具体原因，用于提供更精确的错误提示。
+
+    Returns:
+        (reason, hint): reason 是缺失原因标识，hint 是修复提示
+        reason 可能是:
+        - "runtime_exists_but_node_missing": outline_runtime.json 存在但当前章节点缺失（动态窗口未生成成功）
+        - "volume_exists_but_chapter_missing": 卷详细大纲存在但当前章条目缺失（计划窗口未覆盖）
+        - "no_outline_file": 大纲文件完全不存在
+    """
+    from chapter_outline_loader import has_outline_runtime
+
+    # 1. 检查运行时层
+    if has_outline_runtime(project_root):
+        try:
+            from data_modules.outline_window_parser import load_chapter_outline_node
+            node, source = load_chapter_outline_node(project_root, chapter_num)
+            if node is not None:
+                # 节点存在于运行时层，不应该走到这里
+                return ("found", "")
+            # 运行时层存在但当前章节节点缺失
+            return (
+                "runtime_exists_but_node_missing",
+                "动态窗口未生成成功，当前章节点尚未创建。请确认写作流程已正确调用动态调纲模块。",
+            )
+        except ImportError:
+            # outline_window_parser 不可用，降级检查
+            pass
+
+    # 2. 检查卷详细大纲
+    from chapter_outline_loader import _find_volume_outline_file
+    volume_file = _find_volume_outline_file(project_root, chapter_num)
+    if volume_file is not None:
+        # 卷详细大纲存在，尝试验证当前章是否真的不存在
+        try:
+            content = volume_file.read_text(encoding="utf-8")
+            import re
+            chapter_pattern = rf"###\s*第\s*{chapter_num}\s*章"
+            if re.search(chapter_pattern, content):
+                # 章节实际上存在于卷大纲中
+                return ("found", "")
+            # 卷大纲存在但当前章条目缺失
+            return (
+                "volume_exists_but_chapter_missing",
+                "计划窗口未覆盖当前章节。请在卷详细大纲中补充第{chapter_num}章的章节条目，"
+                "或使用动态调纲功能为当前章生成独立大纲。".format(chapter_num=chapter_num),
+            )
+        except Exception:
+            pass
+
+    # 3. 大纲文件完全不存在
+    return (
+        "no_outline_file",
+        "大纲文件不存在。请在 `大纲/` 目录下创建卷详细大纲文件或独立章节大纲文件。",
+    )
+
+
 def ensure_chapter_outline_exists(
     project_root: Path,
     chapter_num: int,
@@ -82,16 +140,30 @@ def ensure_chapter_outline_exists(
     """Hard gate: chapter outline must exist and be actionable."""
     resolved = outline if outline is not None else extract_chapter_outline(project_root, chapter_num)
     if is_missing_chapter_outline(resolved):
-        raise ValueError(
-            f"第{chapter_num}章缺少可用大纲。请先在`大纲/`中补充对应章节大纲后再执行 /webnovel-write。"
-        )
+        # 检测缺失原因，提供更精确的错误提示
+        reason, hint = _detect_outline_missing_reason(project_root, chapter_num)
+        if reason == "runtime_exists_but_node_missing":
+            raise ValueError(
+                f"第{chapter_num}章缺少可用大纲（动态窗口未生成）。\n"
+                f"{hint}\n"
+                f"请确认已完成前一章写作并触发动态调纲。"
+            )
+        elif reason == "volume_exists_but_chapter_missing":
+            raise ValueError(
+                f"第{chapter_num}章缺少可用大纲（计划窗口未覆盖）。\n{hint}"
+            )
+        else:
+            raise ValueError(
+                f"第{chapter_num}章缺少可用大纲。\n{hint}"
+                "请先在`大纲/`中补充对应章节大纲后再执行 /webnovel-write。"
+            )
     if require_contract:
         missing = validate_chapter_contract(resolved, min_state_changes=min_state_changes)
         if missing:
             missing_text = "、".join(missing)
             raise ValueError(
                 f"第{chapter_num}章大纲缺少关键项：{missing_text}。"
-                "请补齐‘目标/冲突/动作/结果/代价/钩子’，并至少包含可识别的状态变化。"
+                "请补齐’目标/冲突/动作/结果/代价/钩子’，并至少包含可识别的状态变化。"
             )
     return resolved
 
@@ -100,7 +172,17 @@ def _friendly_context_error(error: Exception) -> str:
     message = str(error)
     hints = ["请先执行 preflight 或 where，确认 project_root 解析正确。"]
 
-    if "缺少可用大纲" in message:
+    if "动态窗口未生成" in message:
+        hints = [
+            "动态窗口未生成成功，请检查写作流程是否正确调用了动态调纲模块。",
+            "可以手动执行 `/zhizhang-plan` 或 `/zhizhang-adjust` 来生成活动窗口。",
+        ]
+    elif "计划窗口未覆盖" in message:
+        hints = [
+            "当前章节未在卷详细大纲中，请使用 `/zhizhang-plan` 补充章节规划。",
+            "或者使用 `/zhizhang-adjust` 为当前章生成独立章节大纲。",
+        ]
+    elif "缺少可用大纲" in message:
         hints = [
             "在 `大纲/` 下补齐目标章节（卷纲切片或独立章节纲均可）。",
             "可先运行 `webnovel.py extract-context --chapter N` 复检是否通过。",

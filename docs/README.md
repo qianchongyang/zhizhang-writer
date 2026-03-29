@@ -11,11 +11,12 @@
 3. [文档公开边界](open-source-policy.md)
 4. [提交代码规则](commit-rules.md)
 5. [架构与模块](architecture.md)
-6. [命令详解](commands.md)
-7. [RAG 与配置](rag-and-config.md)
-8. [题材模板](genres.md)
-9. [运维与恢复](operations.md)
-10. [版本变更日志](CHANGELOG.md)
+6. [动态大纲手册](dynamic-outline-guide.md)
+7. [命令详解](commands.md)
+8. [RAG 与配置](rag-and-config.md)
+9. [题材模板](genres.md)
+10. [运维与恢复](operations.md)
+11. [版本变更日志](CHANGELOG.md)
 
 ## 快速索引
 
@@ -27,6 +28,7 @@
 ### 进阶
 
 - `architecture.md`：系统架构、双 Agent、审查链路
+- `dynamic-outline-guide.md`：动态大纲原理、自动调纲流程、日常使用
 - `commands.md`：命令工作流与输出结果
 - `rag-and-config.md`：RAG 和环境变量配置
 - `operations.md`：目录结构、运维、恢复、健康检查
@@ -37,6 +39,7 @@
 - `open-source-policy.md`：哪些文档适合公开，哪些保持内部
 - `CHANGELOG.md`：按更新条目持续记录对外可见变化
 - `architecture.md`：控制面 / 真相层 / 运行层
+- `dynamic-outline-guide.md`：动态大纲的运行机制和日常使用
 - `commands.md`：批量写作、审查、恢复、数据回写
 
 ## 目录导览
@@ -44,6 +47,7 @@
 - `README.md`：主页，负责第一印象和 Claude 安装入口
 - `docs/README.md`：文档索引，负责阅读路径和目录入口
 - `docs/CHANGELOG.md`：变更日志，记录每次对外可见更新
+- `docs/dynamic-outline-guide.md`：动态大纲手册，说明原理与日常使用
 - `docs/commit-rules.md`：提交和发布规则，避免把草稿混进公开提交
 - `docs/private/`：本地过程记录与草稿，不作为公开仓库入口
 

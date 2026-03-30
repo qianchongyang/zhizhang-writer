@@ -418,6 +418,140 @@ Step 5 失败隔离规则：
 债务利息：
 - 默认关闭，仅在用户明确要求或开启追踪时执行（见 `step-5-debt-switch.md`）。
 
+### Step 5.5A：影响预览（Impact Preview）
+
+**前置条件**：Step 5 已完成且 `state.json` 已更新
+
+**执行方式**：
+- Python 层执行 `OutlineImpactAnalyzer.analyze()`
+- 输入：当前章节结果（正文、state_changes、relationships_new）、review_summary、活动窗口节点、主线锚点
+
+**加载文件**：
+```bash
+cat "${SKILL_ROOT}/../../references/dynamic-outline-contract.md"
+```
+
+**输出**：
+- `ImpactPreview` 结构（JSON），包含：
+  - `needs_adjustment`: boolean
+  - `adjustment_type`: `none` | `minor_reorder` | `insert_arc` | `window_extend` | `block_for_manual_review`
+  - `reason`: string
+  - `affected_chapters`: [int]
+  - `affected_entities`: [string]
+  - `affected_foreshadowing`: [string]
+  - `timeline_risk`: string
+  - `mainline_risk`: string
+  - `recommended_return_to_mainline_by`: int | null
+  - `conflict_signals`: [string]
+  - `prerequisite_gaps`: [string]
+  - `relationship_jump_signals`: [string]
+  - `copy_segment_signals`: [string]
+
+**Python 调用**：
+```bash
+python3 -X utf8 "${SCRIPTS_DIR}/data_modules/outline_impact_analyzer.py" \
+  --project-root "${PROJECT_ROOT}" \
+  --chapter ${chapter_num} \
+  --chapter-result "@${PROJECT_ROOT}/.webnovel/tmp/chapter_result_ch${chapter_padded}.json" \
+  --output-file "${PROJECT_ROOT}/.webnovel/tmp/impact_preview_ch${chapter_padded}.json"
+```
+
+**用途**：
+- 供 Step 5.5B 消费，提供结构化的影响分析
+- 不直接修改大纲，只生成分析结果
+
+### Step 5.5B：动态调纲决策（Dynamic Outline Decision）
+
+**前置条件**：Step 5.5A 已完成且 `impact_preview` 已生成
+
+**执行方式**：
+- LLM 分析 `ImpactPreview`，输出符合 `DynamicOutlineDecision` schema 的结构化决策
+- Python 层执行 Contract 校验
+
+**加载文件**：
+```bash
+cat "${SKILL_ROOT}/../../references/dynamic-outline-contract.md"
+```
+
+**LLM 决策任务**：
+1. 分析 `ImpactPreview` 中的所有信号（conflict_signals、relationship_jump_signals、copy_segment_signals 等）
+2. 判断是否需要调整大纲
+3. 若需要，决定调整类型：
+   - `no_change`：无需调整
+   - `minor_reorder`：轻微重排（前置条件缺口、少量冲突）
+   - `insert_arc`：插入弧线/副本（需提供 mainline_service_reason）
+   - `window_extend`：扩展活动窗口（关系跃迁+承诺过大）
+   - `block_for_manual_review`：阻塞，需人工审查（时间线矛盾、主线严重偏离）
+4. 输出结构化决策 JSON
+
+**必须遵守的硬约束**：
+- **禁止修改总纲锚点**：不得变更 `mainline_anchors`
+- **禁止推翻已写事实**：不得要求修改 `chapter <= current_chapter` 的内容
+- **insert_arc 必须有主线服务理由**：每个插入操作必须提供 `mainline_service_reason`
+
+**Contract 校验（Python 层）**：
+```python
+# 伪代码
+def validate_decision(output: dict) -> tuple[bool, list[str]]:
+    errors = []
+
+    # Schema 校验
+    required_fields = ["decision", "reason"]
+    for field in required_fields:
+        if field not in output:
+            errors.append(f"Missing required field: {field}")
+
+    # 枚举校验
+    valid_decisions = ["no_change", "minor_reorder", "insert_arc", "window_extend", "block_for_manual_review"]
+    if output.get("decision") not in valid_decisions:
+        errors.append(f"Invalid decision: {output['decision']}")
+
+    # insert_arc 必须有 mainline_service_reason
+    if output.get("decision") == "insert_arc":
+        if not output.get("mainline_service_reason"):
+            errors.append("insert_arc requires mainline_service_reason")
+
+    return len(errors) == 0, errors
+```
+
+**降级策略**：
+- 校验失败时，**不自动落盘**
+- 将错误写入 `observability/dynamic_outline_warnings.jsonl`
+- 保持原 `updated_window` 不变
+
+**Python 调用**：
+```bash
+# LLM 输出后，Python 层执行校验
+python3 -X utf8 "${SCRIPTS_DIR}/data_modules/outline_contract_validator.py" \
+  --project-root "${PROJECT_ROOT}" \
+  --decision-file "${PROJECT_ROOT}/.webnovel/tmp/dynamic_outline_decision_ch${chapter_padded}.json"
+```
+
+**输出**：
+- `DynamicOutlineDecision` 结构（JSON），包含：
+  - `decision`: 决策类型
+  - `reason`: 决策原因
+  - `mainline_service_reason`: 副本服务主线理由（insert_arc 时必填）
+  - `return_to_mainline_by`: 推荐回归章节
+  - `updated_window`: 窗口更新信息
+  - `timeline_patch`: 时间线补丁
+  - `beat_patch`: 节拍补丁
+  - `risk_notes`: 风险备注
+
+**成功后**：
+- 更新 `outline_runtime`（窗口范围、节拍列表）
+- 记录到 `observability/dynamic_outline_decisions.jsonl`
+
+**失败/降级时**：
+- 不更新 `outline_runtime`
+- 记录告警到 `observability/dynamic_outline_warnings.jsonl`
+- 调用 `workflow_manager.set_outline_blocked()` 标记阻断状态
+- **Step 6 被锁定，不得自动进入 Git 备份**
+
+**阻断恢复**：
+- 只有在 5.5A/5.5B 重新成功完成后，调用 `workflow_manager.clear_outline_blocked()` 解除阻断
+- 或者用户手动清理任务状态
+
 ### Step 6：Git 备份（可失败但需说明）
 
 ```bash

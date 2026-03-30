@@ -19,12 +19,18 @@ try:
     from chapter_outline_loader import (
         is_missing_chapter_outline,
         load_chapter_outline,
+        load_chapter_outline_nodes,
+        has_outline_runtime,
+        get_outline_runtime_mtime,
         validate_chapter_contract,
     )
 except ImportError:  # pragma: no cover
     from scripts.chapter_outline_loader import (
         is_missing_chapter_outline,
         load_chapter_outline,
+        load_chapter_outline_nodes,
+        has_outline_runtime,
+        get_outline_runtime_mtime,
         validate_chapter_contract,
     )
 
@@ -32,6 +38,7 @@ from .config import get_config
 from .index_manager import IndexManager, WritingChecklistScoreMeta
 from .context_ranker import ContextRanker
 from .snapshot_manager import SnapshotManager, SnapshotVersionMismatch
+from .mainline_anchor_manager import MainlineAnchorManager, create_mainline_anchor_manager
 from .context_weights import (
     DEFAULT_TEMPLATE as CONTEXT_DEFAULT_TEMPLATE,
     TEMPLATE_WEIGHTS as CONTEXT_TEMPLATE_WEIGHTS,
@@ -125,6 +132,43 @@ class ContextManager:
         self.snapshot_manager = snapshot_manager or SnapshotManager(self.config)
         self.index_manager = IndexManager(self.config)
         self.context_ranker = ContextRanker(self.config)
+        self.mainline_anchor_manager: Optional[MainlineAnchorManager] = None
+
+    def _load_mainline_anchors(self, chapter: int) -> Dict[str, Any]:
+        """
+        加载当前章节适用的主线锚点。
+
+        用于动态调纲时确保遵守主线锚点约束。
+        """
+        if self.mainline_anchor_manager is None:
+            try:
+                self.mainline_anchor_manager = create_mainline_anchor_manager(self.config)
+            except Exception as e:
+                logger.warning("Failed to create MainlineAnchorManager: %s", e)
+                return {"anchors": [], "error": str(e)}
+
+        try:
+            # 获取当前章节适用的锚点
+            anchors = self.mainline_anchor_manager.get_anchors_for_chapter(chapter)
+            anchor_dicts = [a.to_dict() for a in anchors]
+
+            # 同时获取卷锚点（如果有卷信息）
+            volume_anchors = []
+            state = self._load_state()
+            volume_num = state.get("project", {}).get("current_volume") or state.get("project_info", {}).get("current_volume")
+            if volume_num:
+                vol_anchors = self.mainline_anchor_manager.get_volume_anchors(int(volume_num))
+                volume_anchors = [a.to_dict() for a in vol_anchors]
+
+            return {
+                "anchors": anchor_dicts,
+                "volume_anchors": volume_anchors,
+                "chapter": chapter,
+                "has_anchors": len(anchor_dicts) > 0,
+            }
+        except Exception as e:
+            logger.warning("Failed to load mainline anchors: %s", e)
+            return {"anchors": [], "error": str(e)}
 
     def _story_memory_path(self) -> Path:
         return getattr(self.config, "story_memory_file", self.config.webnovel_dir / "memory" / "story_memory.json")
@@ -467,6 +511,10 @@ class ContextManager:
             "author_intent": author_intent,
             "current_focus": current_focus,
         }
+
+        # 加载主线锚点（动态调纲时必须读取当前卷主线锚点）
+        mainline_anchors = self._load_mainline_anchors(chapter)
+        memory["mainline_anchors"] = mainline_anchors
         story_skeleton = self._load_story_skeleton(chapter)
         alert_slice = max(0, int(self.config.context_alerts_slice))
         reader_signal = self._load_reader_signal(chapter)
@@ -1201,7 +1249,53 @@ class ContextManager:
         return json.loads(path.read_text(encoding="utf-8"))
 
     def _load_outline(self, chapter: int) -> str:
-        outline = load_chapter_outline(self.config.project_root, chapter, max_chars=1500)
+        """
+        加载章节大纲文本。
+
+        优先级：
+        1. outline_runtime.json（运行时层）- 如果存在且包含当前章节点
+        2. 卷详细大纲解析 - 如果节点存在于卷大纲中
+        3. 旧逻辑（load_chapter_outline 文本切片）
+
+        这样当运行层已经有更新后的活动窗口时，当前章以运行层为准。
+        """
+        project_root = self.config.project_root
+
+        # 用于验证的节点（如果通过新路径获取）
+        validated_node = None
+
+        # 1. 首先尝试从运行时层加载（outline_runtime.json）
+        if has_outline_runtime(project_root):
+            nodes, source = load_chapter_outline_nodes(project_root, chapter)
+            if nodes and source == "runtime":
+                # 找到运行时层节点，转换为文本格式
+                try:
+                    from .outline_window_parser import node_to_outline_text, validate_outline_node
+                    outline = node_to_outline_text(nodes[0])
+                    validated_node = nodes[0]
+                except ImportError:
+                    # 如果 outline_window_parser 不可用，降级到文本
+                    outline = None
+                    validated_node = None
+            else:
+                outline = None
+        else:
+            outline = None
+
+        # 2. 如果第一步没有获取到，尝试从卷详细大纲解析
+        if outline is None:
+            try:
+                from .outline_window_parser import load_chapter_outline_node, node_to_outline_text, validate_outline_node
+                node, source = load_chapter_outline_node(project_root, chapter)
+                if node:
+                    outline = node_to_outline_text(node)
+                    validated_node = node
+            except ImportError:
+                pass
+
+        # 3. 如果仍然没有，回退到旧逻辑（文本切片）
+        if outline is None:
+            outline = load_chapter_outline(project_root, chapter, max_chars=1500)
         if bool(getattr(self.config, "context_require_chapter_outline", True)) and is_missing_chapter_outline(outline):
             raise ValueError(
                 f"第{chapter}章缺少可用大纲。请先在`大纲/`补齐章节大纲，再执行写作流程。"
@@ -1209,13 +1303,35 @@ class ContextManager:
 
         if bool(getattr(self.config, "context_require_chapter_contract", True)):
             min_state_changes = max(0, int(getattr(self.config, "context_min_state_changes_per_chapter", 0)))
-            missing = validate_chapter_contract(outline, min_state_changes=min_state_changes)
-            if missing:
-                missing_text = "、".join(missing)
-                raise ValueError(
-                    f"第{chapter}章大纲缺少关键项：{missing_text}。"
-                    "请补齐‘目标/冲突/动作/结果/代价/钩子’，并至少包含可识别的状态变化。"
-                )
+
+            # 如果有验证过的节点，优先使用节点级验证
+            if validated_node is not None:
+                try:
+                    from .outline_window_parser import validate_outline_node
+                    missing = validate_outline_node(validated_node)
+                    if missing:
+                        missing_text = "、".join(missing)
+                        raise ValueError(
+                            f"第{chapter}章大纲缺少关键项：{missing_text}。"
+                            "请补齐’目标/冲突/动作/结果/代价/钩子’，并至少包含可识别的状态变化。"
+                        )
+                    # 节点验证通过，但还需要检查状态变化
+                    if min_state_changes > 0 and len(validated_node.state_changes) < min_state_changes:
+                        raise ValueError(
+                            f"第{chapter}章大纲缺少关键项：状态变化。"
+                            "请补齐’目标/冲突/动作/结果/代价/钩子’，并至少包含可识别的状态变化。"
+                        )
+                except ImportError:
+                    pass  # 降级到文本验证
+            else:
+                # 使用旧文本验证
+                missing = validate_chapter_contract(outline, min_state_changes=min_state_changes)
+                if missing:
+                    missing_text = "、".join(missing)
+                    raise ValueError(
+                        f"第{chapter}章大纲缺少关键项：{missing_text}。"
+                        "请补齐’目标/冲突/动作/结果/代价/钩子’，并至少包含可识别的状态变化。"
+                    )
 
         return outline
 

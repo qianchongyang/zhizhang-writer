@@ -53,6 +53,12 @@ STEP_STATUS_STARTED = "started"
 STEP_STATUS_RUNNING = "running"
 STEP_STATUS_COMPLETED = "completed"
 STEP_STATUS_FAILED = "failed"
+STEP_STATUS_WARNING = "warning"
+
+# Dynamic outline blocking flags
+OUTLINE_STATUS_OK = "ok"
+OUTLINE_STATUS_BLOCKED_FAILED = "failed"
+OUTLINE_STATUS_BLOCKED_MANUAL_REVIEW = "block_for_manual_review"
 
 
 def now_iso() -> str:
@@ -207,6 +213,8 @@ def expected_step_owner(command: str, step_id: str) -> str:
             "Step 3": "review-agents",
             "Step 4": "polish-agent",
             "Step 5": "data-agent",
+            "Step 5.5A": "data-agent",
+            "Step 5.5B": "data-agent",
             "Step 6": "backup-agent",
         }
         return mapping.get(step_id, "webnovel-write-skill")
@@ -244,6 +252,7 @@ def _new_task(command: str, args: Dict[str, Any]) -> Dict[str, Any]:
         "failed_steps": [],
         "pending_steps": get_pending_steps(command),
         "retry_count": 0,
+        "outline_blocked": OUTLINE_STATUS_OK,  # Block Step 6 if dynamic outline fails
         "artifacts": {
             "chapter_file": {},
             "git_status": {},
@@ -323,6 +332,23 @@ def start_step(step_id, step_name, progress_note=None):
         return
 
     command = str(task.get("command") or "")
+
+    # Block Step 6 if dynamic outline adjustment failed or requires manual review
+    if step_id == "Step 6":
+        outline_status = task.get("outline_blocked", OUTLINE_STATUS_OK)
+        if outline_status != OUTLINE_STATUS_OK:
+            safe_append_call_trace(
+                "step_blocked_by_outline",
+                {
+                    "step_id": step_id,
+                    "outline_blocked": outline_status,
+                    "command": command,
+                    "chapter": task.get("args", {}).get("chapter_num"),
+                },
+            )
+            print(f"⚠️ {step_id} 被阻断：动态调纲状态为 {outline_status}，需先解决后再继续")
+            return
+
     if not step_allowed_before(command, step_id, task.get("completed_steps", [])):
         safe_append_call_trace(
             "step_order_violation",
@@ -430,6 +456,56 @@ def complete_step(step_id, artifacts_json=None):
     )
     log_cli_call(f"step_{step_id}_complete")
     print(f"✅ {step_id} 完成")
+
+
+def set_outline_blocked(status=OUTLINE_STATUS_BLOCKED_FAILED):
+    """Mark dynamic outline as blocked, preventing Step 6 from executing.
+
+    Call this when Step 5.5A/5.5B fails or returns block_for_manual_review.
+
+    Args:
+        status: OUTLINE_STATUS_BLOCKED_FAILED or OUTLINE_STATUS_BLOCKED_MANUAL_REVIEW
+    """
+    state = load_state()
+    task = state.get("current_task")
+    if not task:
+        print("⚠️ 无活动任务")
+        return
+
+    task["outline_blocked"] = status
+    task["last_heartbeat"] = now_iso()
+    save_state(state)
+    safe_append_call_trace(
+        "outline_blocked",
+        {
+            "status": status,
+            "command": task.get("command"),
+            "chapter": task.get("args", {}).get("chapter_num"),
+        },
+    )
+    print(f"⚠️ 动态调纲已阻断，状态: {status}，Step 6 被锁定")
+
+
+def clear_outline_blocked():
+    """Clear dynamic outline blocked state, allowing Step 6 to execute."""
+    state = load_state()
+    task = state.get("current_task")
+    if not task:
+        print("⚠️ 无活动任务")
+        return
+
+    if task.get("outline_blocked"):
+        task["outline_blocked"] = OUTLINE_STATUS_OK
+        task["last_heartbeat"] = now_iso()
+        save_state(state)
+        safe_append_call_trace(
+            "outline_unblocked",
+            {
+                "command": task.get("command"),
+                "chapter": task.get("args", {}).get("chapter_num"),
+            },
+        )
+        print("✅ 动态调纲阻断已解除，Step 6 可执行")
 
 
 def complete_task(final_artifacts_json=None):
@@ -657,8 +733,26 @@ def analyze_recovery_options(interrupt_info):
                 "label": "从 Step 5 重新开始",
                 "risk": "low",
                 "description": "重新运行 Data Agent（幂等）",
-                "actions": ["重新调用 Data Agent", "继续 Step 6（Git 备份）"],
+                "actions": ["重新调用 Data Agent", "继续 Step 5.5A（影响分析）"],
             }
+        ]
+
+    if step_id in {"Step 5.5A", "Step 5.5B"}:
+        return [
+            {
+                "option": "A",
+                "label": "从 Step 5.5A 重新开始",
+                "risk": "low",
+                "description": "重新执行动态大纲影响分析",
+                "actions": ["重新执行 Step 5.5A", "继续 Step 5.5B（如需要）", "继续 Step 6（Git 备份）"],
+            },
+            {
+                "option": "B",
+                "label": "终止任务（需人工介入）",
+                "risk": "medium",
+                "description": "动态调纲失败，标记任务为需人工审查，不自动进入 Git",
+                "actions": ["标记 outline_blocked=block_for_manual_review", "任务停留在调纲阶段"],
+            },
         ]
 
     if step_id == "Step 6":
@@ -838,6 +932,7 @@ def load_state():
         state["current_task"].setdefault("failed_steps", [])
         state["current_task"].setdefault("retry_count", 0)
         state["current_task"].setdefault("workflow_trace", {})
+        state["current_task"].setdefault("outline_blocked", OUTLINE_STATUS_OK)
     return state
 
 
@@ -852,7 +947,8 @@ def get_pending_steps(command):
     """Get command pending step list."""
     if command == "webnovel-write":
         # v2: Step 1 内置 Contract v2，不再单独记录 Step 1.5，避免产生 step_order_violation 噪声。
-        return ["Step 1", "Step 2A", "Step 2B", "Step 3", "Step 4", "Step 5", "Step 6"]
+        # Step 5.5A/5.5B: 动态大纲影响分析（Step 5 完成后自动进入）
+        return ["Step 1", "Step 2A", "Step 2B", "Step 3", "Step 4", "Step 5", "Step 5.5A", "Step 5.5B", "Step 6"]
     if command == "webnovel-review":
         return ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5", "Step 6", "Step 7", "Step 8"]
     return []

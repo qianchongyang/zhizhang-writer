@@ -298,3 +298,141 @@ def test_workflow_normalizes_protocol_artifacts(tmp_path, monkeypatch):
     assert artifacts["summary_written"] is True
     assert artifacts["protocol_outputs"]["review"]["verified"] is True
     assert artifacts["protocol_outputs"]["data_write"]["verified"] is True
+
+
+def test_outline_blocked_prevents_step6_start(tmp_path, monkeypatch):
+    """Test that Step 6 is blocked when outline_blocked is set."""
+    module = _load_module()
+    monkeypatch.setattr(module, "find_project_root", lambda: tmp_path)
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+
+    module.start_task("webnovel-write", {"chapter_num": 10})
+    module.start_step("Step 1", "Context")
+    module.complete_step("Step 1")
+
+    # Complete up to Step 5.5B
+    for step_id in ["Step 2A", "Step 2B", "Step 3", "Step 4", "Step 5", "Step 5.5A", "Step 5.5B"]:
+        module.start_step(step_id, step_id)
+        module.complete_step(step_id)
+
+    # Set outline blocked
+    module.set_outline_blocked(module.OUTLINE_STATUS_BLOCKED_FAILED)
+
+    # Verify outline_blocked is set
+    state = module.load_state()
+    assert state["current_task"]["outline_blocked"] == module.OUTLINE_STATUS_BLOCKED_FAILED
+
+    # Try to start Step 6 - should be blocked
+    module.start_step("Step 6", "Git Backup")
+
+    # Step 6 should NOT have started - current_step should still be None
+    state = module.load_state()
+    assert state["current_task"]["current_step"] is None
+
+    # Verify git_status.completed is NOT set
+    assert state["current_task"]["artifacts"].get("git_status") != {"completed": True}
+
+
+def test_outline_blocked_manual_review_prevents_step6(tmp_path, monkeypatch):
+    """Test that Step 6 is blocked when outline is blocked for manual review."""
+    module = _load_module()
+    monkeypatch.setattr(module, "find_project_root", lambda: tmp_path)
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+
+    module.start_task("webnovel-write", {"chapter_num": 10})
+    module.start_step("Step 1", "Context")
+    module.complete_step("Step 1")
+
+    # Complete up to Step 5
+    for step_id in ["Step 2A", "Step 2B", "Step 3", "Step 4", "Step 5"]:
+        module.start_step(step_id, step_id)
+        module.complete_step(step_id)
+
+    # Set outline blocked for manual review
+    module.set_outline_blocked(module.OUTLINE_STATUS_BLOCKED_MANUAL_REVIEW)
+
+    # Verify outline_blocked is set
+    state = module.load_state()
+    assert state["current_task"]["outline_blocked"] == module.OUTLINE_STATUS_BLOCKED_MANUAL_REVIEW
+
+    # Try to start Step 6 - should be blocked
+    module.start_step("Step 6", "Git Backup")
+
+    # Step 6 should NOT have started
+    state = module.load_state()
+    assert state["current_task"]["current_step"] is None
+
+
+def test_clear_outline_blocked_allows_step6(tmp_path, monkeypatch):
+    """Test that clearing outline_blocked allows Step 6 to proceed."""
+    module = _load_module()
+    monkeypatch.setattr(module, "find_project_root", lambda: tmp_path)
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+
+    module.start_task("webnovel-write", {"chapter_num": 10})
+    module.start_step("Step 1", "Context")
+    module.complete_step("Step 1")
+
+    # Complete up to Step 5.5B
+    for step_id in ["Step 2A", "Step 2B", "Step 3", "Step 4", "Step 5", "Step 5.5A", "Step 5.5B"]:
+        module.start_step(step_id, step_id)
+        module.complete_step(step_id)
+
+    # Set then clear outline blocked
+    module.set_outline_blocked(module.OUTLINE_STATUS_BLOCKED_FAILED)
+    module.clear_outline_blocked()
+
+    # Verify outline_blocked is cleared
+    state = module.load_state()
+    assert state["current_task"]["outline_blocked"] == module.OUTLINE_STATUS_OK
+
+    # Now Step 6 should be allowed
+    module.start_step("Step 6", "Git Backup")
+
+    state = module.load_state()
+    assert state["current_task"]["current_step"] is not None
+    assert state["current_task"]["current_step"]["id"] == "Step 6"
+
+
+def test_new_task_initializes_outline_blocked(tmp_path, monkeypatch):
+    """Test that a new task initializes outline_blocked to OK."""
+    module = _load_module()
+    monkeypatch.setattr(module, "find_project_root", lambda: tmp_path)
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+
+    module.start_task("webnovel-write", {"chapter_num": 10})
+
+    state = module.load_state()
+    assert state["current_task"]["outline_blocked"] == module.OUTLINE_STATUS_OK
+
+
+def test_analyze_recovery_options_no_skip_for_55ab(tmp_path, monkeypatch):
+    """Test that analyze_recovery_options does not offer skip option for Step 5.5A/5.5B."""
+    module = _load_module()
+    monkeypatch.setattr(module, "find_project_root", lambda: tmp_path)
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+
+    module.start_task("webnovel-write", {"chapter_num": 10})
+    module.start_step("Step 1", "Context")
+    module.complete_step("Step 1")
+    module.start_step("Step 5.5A", "Impact Preview")
+
+    interrupt = module.detect_interruption()
+    options = module.analyze_recovery_options(interrupt)
+
+    # Should not have "跳过动态调纲" option
+    labels = [opt.get("label") for opt in options]
+    assert "跳过动态调纲" not in labels
+
+    # Should have option to restart or terminate for manual review
+    assert any("从 Step 5.5A 重新开始" in label for label in labels) or any("终止任务" in label for label in labels)

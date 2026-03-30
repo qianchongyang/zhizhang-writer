@@ -219,3 +219,93 @@ def load_chapter_outline(project_root: Path, chapter_num: int, max_chars: int | 
     if max_chars and len(outline) > max_chars:
         return outline[:max_chars] + "\n...(已截断)"
     return outline
+
+
+# =============================================================================
+# Node-Level Loading Interface (Activity Window)
+# =============================================================================
+
+def load_chapter_outline_nodes(project_root: Path, chapter: int) -> tuple[list, str]:
+    """
+    加载章节的 OutlineNode 列表（兼容接口）
+
+    首先尝试从 outline_runtime.json 加载，如果没有则从卷大纲解析。
+
+    Args:
+        project_root: 项目根目录
+        chapter: 章节号
+
+    Returns:
+        ([nodes], source): 节点列表和来源 ("runtime" | "volume" | "error")
+        如果失败，返回 ([], error_message)
+    """
+    try:
+        from data_modules.outline_window_parser import (
+            load_chapter_outline_node,
+            OutlineNode,
+        )
+        node, source = load_chapter_outline_node(project_root, chapter)
+        if node:
+            return [node], source
+        return [], source
+    except ImportError:
+        # 如果 outline_window_parser 不可用，回退到旧逻辑
+        return [], "module_not_available"
+
+
+def load_volume_outline_nodes(project_root: Path, volume_num: int) -> tuple[list, str]:
+    """
+    加载指定卷的所有章节 OutlineNode
+
+    Args:
+        project_root: 项目根目录
+        volume_num: 卷号
+
+    Returns:
+        ([nodes], source): 节点列表和来源
+        如果失败，返回 ([], error_message)
+    """
+    try:
+        from data_modules.outline_window_parser import (
+            load_volume_outline_window,
+            OutlineNode,
+        )
+        window = load_volume_outline_window(project_root, volume_num)
+        if window:
+            return window.nodes, "volume"
+        return [], "volume_not_found"
+    except ImportError:
+        return [], "module_not_available"
+
+
+def has_outline_runtime(project_root: Path) -> bool:
+    """
+    检查是否存在 outline_runtime.json 运行时层
+
+    Args:
+        project_root: 项目根目录
+
+    Returns:
+        True 如果存在 outline_runtime.json
+    """
+    runtime_path = project_root / ".webnovel" / "outline_runtime.json"
+    return runtime_path.exists()
+
+
+def get_outline_runtime_mtime(project_root: Path) -> int:
+    """
+    获取 outline_runtime.json 的修改时间
+
+    Args:
+        project_root: 项目根目录
+
+    Returns:
+        修改时间戳（纳秒），如果不存在则返回 0
+    """
+    runtime_path = project_root / ".webnovel" / "outline_runtime.json"
+    if not runtime_path.exists():
+        return 0
+    try:
+        return int(runtime_path.stat().st_mtime_ns)
+    except Exception:
+        return 0

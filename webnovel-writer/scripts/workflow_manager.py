@@ -127,6 +127,64 @@ def append_call_trace(event: str, payload: Optional[Dict[str, Any]] = None):
         f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+def _load_protocol_payload(path_str: str) -> Optional[Dict[str, Any]]:
+    try:
+        from data_modules.agent_protocol import read_protocol_json
+    except Exception:
+        return None
+
+    path = Path(path_str)
+    if not path.exists():
+        return None
+    try:
+        return read_protocol_json(path, verify=True)
+    except Exception as exc:
+        logger.warning("failed to load protocol payload from %s: %s", path, exc)
+        return None
+
+
+def _normalize_artifacts_payload(artifacts: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(artifacts or {})
+    protocol_refs = {
+        "context_protocol": "context",
+        "review_protocol": "review",
+        "data_protocol": "data_write",
+    }
+    protocol_outputs = dict(normalized.get("protocol_outputs") or {})
+
+    for key, label in protocol_refs.items():
+        value = normalized.get(key)
+        if not isinstance(value, str) or not value:
+            continue
+        payload = _load_protocol_payload(value)
+        protocol_outputs[label] = {
+            "path": value,
+            "verified": bool(payload),
+            "type": (payload or {}).get("type"),
+            "chapter": (payload or {}).get("chapter"),
+        }
+        if not payload:
+            continue
+        if label == "context":
+            normalized["context_built"] = True
+        elif label == "review":
+            normalized["review_completed"] = True
+            anti_ai = payload.get("anti_ai") or {}
+            if anti_ai:
+                normalized["anti_ai_pass"] = anti_ai.get("pass")
+                normalized["anti_ai_penalty"] = anti_ai.get("penalty")
+                normalized["anti_ai_rewrite_required"] = anti_ai.get("rewrite_required")
+        elif label == "data_write":
+            normalized["state_json_modified"] = bool(payload.get("state_updated", False))
+            normalized["index_updated"] = bool(payload.get("index_updated", False))
+            normalized["summary_written"] = bool(payload.get("summary_written", False))
+            normalized["rag_indexed"] = bool(payload.get("rag_indexed", False))
+
+    if protocol_outputs:
+        normalized["protocol_outputs"] = protocol_outputs
+    return normalized
+
+
 def safe_append_call_trace(event: str, payload: Optional[Dict[str, Any]] = None):
     try:
         append_call_trace(event, payload)
@@ -343,7 +401,7 @@ def complete_step(step_id, artifacts_json=None):
 
     if artifacts_json:
         try:
-            artifacts = json.loads(artifacts_json)
+            artifacts = _normalize_artifacts_payload(json.loads(artifacts_json))
             current_step["artifacts"] = artifacts
             task["artifacts"].update(artifacts)
         except json.JSONDecodeError as exc:
@@ -396,7 +454,7 @@ def complete_task(final_artifacts_json=None):
 
     if final_artifacts_json:
         try:
-            final_artifacts = json.loads(final_artifacts_json)
+            final_artifacts = _normalize_artifacts_payload(json.loads(final_artifacts_json))
             task["artifacts"].update(final_artifacts)
         except json.JSONDecodeError as exc:
             print(f"⚠️ Final artifacts JSON 解析失败: {exc}")
@@ -809,8 +867,13 @@ def _derive_task_artifacts(task: Dict[str, Any]) -> Dict[str, Any]:
         artifacts["review_completed"] = True
 
     if "Step 5" in completed_ids:
-        artifacts["state_json_modified"] = True
-        artifacts["entities_appeared"] = True
+        data_protocol_present = bool(((artifacts.get("protocol_outputs") or {}).get("data_write")) if isinstance(artifacts.get("protocol_outputs"), dict) else False)
+        if data_protocol_present:
+            artifacts["state_json_modified"] = bool(artifacts.get("state_json_modified", False))
+            artifacts["entities_appeared"] = bool(artifacts.get("entities_appeared", artifacts.get("state_json_modified", False)))
+        else:
+            artifacts["state_json_modified"] = True
+            artifacts["entities_appeared"] = True
 
     if "Step 6" in completed_ids and not artifacts.get("git_status"):
         artifacts["git_status"] = {"completed": True}

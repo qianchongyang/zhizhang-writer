@@ -52,7 +52,7 @@ Step 映射（必须与 `workflow_manager.py get_pending_steps("webnovel-review"
 Step 记录模板（bash，失败不阻断）：
 ```bash
 python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow start-step --step-id "Step 1" --step-name "加载参考" || true
-python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-step --step-id "Step 1" --artifacts '{"ok":true}' || true
+python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-step --step-id "Step 1" --artifacts "{\"context_protocol\":\"${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json\"}" || true
 ```
 
 ## Review depth
@@ -252,6 +252,6 @@ python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" update-sta
 
 ```bash
 python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow start-step --step-id "Step 8" --step-name "收尾" || true
-python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-step --step-id "Step 8" --artifacts '{"ok":true}' || true
-python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-task --artifacts '{"ok":true}' || true
+python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-step --step-id "Step 8" --artifacts "{\"review_protocol\":\"${PROJECT_ROOT}/.webnovel/tmp/merged/review_merged_ch${chapter_padded}.json\"}" || true
+python3 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-task --artifacts "{\"review_protocol\":\"${PROJECT_ROOT}/.webnovel/tmp/merged/review_merged_ch${chapter_padded}.json\"}" || true
 ```

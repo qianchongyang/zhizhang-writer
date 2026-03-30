@@ -43,6 +43,15 @@ try:
 except ImportError:  # pragma: no cover
     from scripts.chapter_paths import find_chapter_file
 
+try:
+    from data_modules.agent_protocol import serialize_context_payload, write_protocol_json
+    from data_modules.config import DataModulesConfig
+    from data_modules.context_manager import ContextManager
+except ImportError:  # pragma: no cover
+    from scripts.data_modules.agent_protocol import serialize_context_payload, write_protocol_json
+    from scripts.data_modules.config import DataModulesConfig
+    from scripts.data_modules.context_manager import ContextManager
+
 
 def _ensure_scripts_path():
     scripts_dir = Path(__file__).resolve().parent
@@ -355,10 +364,6 @@ def _load_rag_assist(project_root: Path, chapter_num: int, outline: str) -> Dict
 
 def _load_contract_context(project_root: Path, chapter_num: int) -> Dict[str, Any]:
     """Build context via ContextManager and return selected sections."""
-    _ensure_scripts_path()
-    from data_modules.config import DataModulesConfig
-    from data_modules.context_manager import ContextManager
-
     config = DataModulesConfig.from_project_root(project_root)
     manager = ContextManager(config)
     payload = manager.build_context(
@@ -876,6 +881,7 @@ def main():
     parser.add_argument("--chapter", type=int, required=True, help="目标章节号")
     parser.add_argument("--project-root", type=str, help="项目根目录")
     parser.add_argument("--format", choices=["text", "json"], default="text", help="输出格式")
+    parser.add_argument("--output-file", type=str, default=None, help="输出到指定文件路径（协议输出模式）")
 
     args = parser.parse_args()
 
@@ -886,6 +892,23 @@ def main():
             else find_project_root()
         )
         payload = build_chapter_context_payload(project_root, args.chapter)
+        if args.output_file:
+            config = DataModulesConfig.from_project_root(project_root)
+            manager = ContextManager(config)
+            internal_payload = manager.build_context(
+                chapter=args.chapter,
+                template="plot",
+                use_snapshot=True,
+                save_snapshot=True,
+                max_chars=8000,
+            )
+            protocol_payload = serialize_context_payload(
+                internal_payload,
+                project_root=project_root,
+                chapter=args.chapter,
+            )
+            write_protocol_json(Path(args.output_file), protocol_payload)
+            return
 
         if args.format == "json":
             print(json.dumps(payload, ensure_ascii=False, indent=2))

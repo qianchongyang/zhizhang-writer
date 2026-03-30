@@ -13,6 +13,7 @@ from pathlib import Path
 
 from .runtime_compat import enable_windows_utf8_stdio
 from typing import Any, Dict, List, Optional
+from .agent_protocol import serialize_context_payload, write_protocol_json
 
 try:
     from chapter_outline_loader import (
@@ -321,7 +322,12 @@ class ContextManager:
             try:
                 cached = self.snapshot_manager.load_snapshot(chapter)
                 if cached and self._is_snapshot_compatible(cached, template, story_memory_meta):
-                    return cached.get("payload", cached)
+                    cached_payload = cached.get("payload", cached)
+                    if isinstance(cached_payload, dict):
+                        meta = cached_payload.setdefault("meta", {})
+                        if isinstance(meta, dict):
+                            meta["snapshot_used"] = True
+                    return cached_payload
             except SnapshotVersionMismatch:
                 # Snapshot incompatible; rebuild below.
                 pass
@@ -372,6 +378,7 @@ class ContextManager:
 
         assembled["template"] = template
         assembled["weights"] = weights
+        assembled.setdefault("meta", {})["snapshot_used"] = False
         if chapter > 0:
             assembled.setdefault("meta", {})["context_weight_stage"] = self._resolve_context_stage(chapter)
         return assembled
@@ -1734,11 +1741,13 @@ def main():
 
         # 独立输出模式：写入文件
         if args.output_file:
-            import json
             output_path = Path(args.output_file)
-            output_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(output_path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=False, indent=2)
+            protocol_payload = serialize_context_payload(
+                payload,
+                project_root=manager.config.project_root,
+                chapter=args.chapter,
+            )
+            write_protocol_json(output_path, protocol_payload)
             print(f"Context written to {args.output_file}", file=sys.stderr)
         else:
             print_success(payload, message="context_built")

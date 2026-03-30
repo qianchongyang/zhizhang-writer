@@ -165,8 +165,8 @@ export PROJECT_ROOT="$(python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-ro
 ```bash
 python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow start-task --command webnovel-write --chapter {chapter_num} || true
 python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow start-step --step-id "Step 1" --step-name "Context Agent" || true
-python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-step --step-id "Step 1" --artifacts '{"ok":true}' || true
-python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-task --artifacts '{"ok":true}' || true
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-step --step-id "Step 1" --artifacts "{\"context_protocol\":\"${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json\"}" || true
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-task --artifacts "{\"context_protocol\":\"${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/ctx_ch${chapter_padded}.json\"}" || true
 ```
 
 要求：
@@ -338,6 +338,11 @@ python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
 
 合并后，使用 `review_merged_ch${chapter_padded}.json` 中的 `overall_score`、`severity_counts`、`dimension_scores` 进行后续落库。
 
+Workflow 建议同步写入：
+```bash
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-step --step-id "Step 3" --artifacts "{\"review_protocol\":\"${PROJECT_ROOT}/.webnovel/tmp/merged/review_merged_ch${chapter_padded}.json\"}" || true
+```
+
 
 ### Step 4：润色（问题修复优先）
 
@@ -358,6 +363,13 @@ cat "${SKILL_ROOT}/references/writing/typesetting.md"
 - 变更摘要（至少含：修复项、保留项、deviation、`anti_ai_force_check`）
 
 ### Step 5：Data Agent（状态与索引回写）
+
+完成后，建议将 Data Agent 结果整理为正式协议文件 `data_ch{NNNN}.json`，并同步写入 workflow：
+
+```bash
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-step --step-id "Step 5" --artifacts "{\"data_protocol\":\"${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/data_ch${chapter_padded}.json\"}" || true
+python3 -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" workflow complete-task --artifacts "{\"review_protocol\":\"${PROJECT_ROOT}/.webnovel/tmp/merged/review_merged_ch${chapter_padded}.json\",\"data_protocol\":\"${PROJECT_ROOT}/.webnovel/tmp/agent_outputs/data_ch${chapter_padded}.json\"}" || true
+```
 
 使用 Task 调用 `data-agent`，参数：
 - `chapter`

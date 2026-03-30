@@ -128,6 +128,106 @@ def _run_script(script_name: str, argv: list[str]) -> int:
     return int(proc.returncode or 0)
 
 
+def cmd_review(args: argparse.Namespace) -> int:
+    """执行章节审查，生成 review protocol 文件"""
+    import json
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    chapter = args.chapter
+    project_root = _resolve_root(args.project_root)
+    output_file = args.output_file
+    output_json = args.json
+
+    if chapter is None:
+        print("错误：review 需要 --chapter 参数", file=sys.stderr)
+        return 2
+
+    # 调用 anti-ai checker
+    anti_ai_args = [
+        sys.executable,
+        str(Path(__file__).parent.parent / "anti_ai_checker.py"),
+        "--chapter", str(chapter),
+        "--project-root", str(project_root),
+        "--json",
+    ]
+
+    proc = subprocess.run(anti_ai_args, capture_output=True, text=True)
+    if proc.returncode != 0:
+        print(f"anti-ai 检查失败: {proc.stderr}", file=sys.stderr)
+        return proc.returncode
+
+    try:
+        anti_ai_result = json.loads(proc.stdout)
+    except json.JSONDecodeError:
+        print(f"anti-ai 输出格式错误: {proc.stdout[:200]}", file=sys.stderr)
+        return 2
+
+    # 映射 severity：anti-ai 的 high_risk 映射到 medium/low
+    penalty = anti_ai_result.get("penalty", 0)
+    high_risk_count = anti_ai_result.get("metrics", {}).get("high_risk_word_count", 0)
+    if penalty >= 20:
+        severity = "high"
+    elif penalty >= 10:
+        severity = "medium"
+    elif high_risk_count > 0:
+        severity = "low"
+    else:
+        severity = None
+
+    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    if severity:
+        severity_counts[severity] = high_risk_count
+
+    # 构造 review payload
+    review_payload = {
+        "overall_score": anti_ai_result.get("overall_score", 0),
+        "severity_counts": severity_counts,
+        "issues": anti_ai_result.get("issues", []),
+        "recommendations": [],
+        "summary": anti_ai_result.get("summary", ""),
+        "anti_ai": {
+            "pass": anti_ai_result.get("pass", False),
+            "penalty": penalty,
+            "rewrite_required": anti_ai_result.get("rewrite_required", False),
+            "rewrite_reason": anti_ai_result.get("rewrite_reason", ""),
+            "rewrite_targets": anti_ai_result.get("rewrite_targets", []),
+        },
+    }
+
+    # 使用 agent_protocol 生成正式协议文件
+    from .agent_protocol import serialize_review_payload
+    chapter_padded = f"{chapter:04d}"
+    protocol_payload = serialize_review_payload(
+        review_payload,
+        chapter=chapter,
+        group="merged",
+    )
+
+    # 确定输出路径
+    if output_file:
+        output_path = Path(output_file)
+    else:
+        output_path = Path(project_root) / ".webnovel" / "tmp" / "agent_outputs" / f"review_merged_ch{chapter_padded}.json"
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # 原子写入
+    tmp_path = output_path.with_suffix(".tmp")
+    tmp_path.write_text(json.dumps(protocol_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp_path.replace(output_path)
+
+    print(f"审查结果已写入: {output_path}", file=sys.stderr)
+    print(f"anti_ai_pass: {protocol_payload['anti_ai']['pass']}", file=sys.stderr)
+    print(f"penalty: {protocol_payload['anti_ai']['penalty']}", file=sys.stderr)
+    print(f"overall_score: {protocol_payload['overall_score']}", file=sys.stderr)
+
+    if output_json:
+        print(json.dumps(protocol_payload, ensure_ascii=False, indent=2))
+
+    return 0
+
 
 def cmd_review_merge(args: argparse.Namespace) -> int:
     """合并两组审查结果"""
@@ -517,7 +617,13 @@ def main() -> None:
 
     p_archive = sub.add_parser("archive", help="转发到 archive_manager.py")
 
-    p_review = sub.add_parser("review", help="审查相关工具")
+    p_review = sub.add_parser("review", help="审查相关工具（支持 anti-AI 质量闸门）")
+    p_review.add_argument("--chapter", type=int, required=False, help="目标章节号")
+    p_review.add_argument("--type", choices=["anti-ai", "full"], default="anti-ai",
+                          help="审查类型：anti-ai 仅去AI味检查，full 全套审查（待实现）")
+    p_review.add_argument("--json", action="store_true", help="输出 JSON 格式")
+    p_review.add_argument("--output-file", type=str, default=None,
+                          help="审查结果输出到指定文件（协议格式）")
     p_review.set_defaults(func=lambda args: 0)  # placeholder, handled below
 
     p_review_merge = sub.add_parser("merge", parents=[p_review], add_help=False)
@@ -533,6 +639,12 @@ def main() -> None:
     p_extract_context = sub.add_parser("extract-context", help="转发到 extract_chapter_context.py")
     p_extract_context.add_argument("--chapter", type=int, required=True, help="目标章节号")
     p_extract_context.add_argument("--format", choices=["text", "json"], default="text", help="输出格式")
+    p_extract_context.add_argument("--output-file", type=str, default=None, help="输出到指定文件路径（协议输出模式）")
+
+    p_anti_ai = sub.add_parser("anti-ai", help="转发到 anti_ai_checker.py（去AI味检查）")
+    p_anti_ai.add_argument("--chapter", type=int, required=False, help="目标章节号")
+    p_anti_ai.add_argument("--file", type=str, required=False, help="正文文件路径")
+    p_anti_ai.add_argument("--json", action="store_true", help="输出 JSON 格式")
 
     # v5.23 健康检查
     p_health = sub.add_parser("health", help="转发到 health_checker.py（健康检查）")
@@ -547,7 +659,7 @@ def main() -> None:
     p_feedback.add_argument("args", nargs=argparse.REMAINDER)
 
     # v5.24 交互式菜单
-    p_menu = sub.add_parser("menu", help="启动交互式菜单（所有功能入口）")
+    p_menu = sub.add_parser("menu", help="启动交互式菜单（导航页与局部工具入口）")
 
     # 兼容：允许 `--project-root` 出现在任意位置（减少 agents/skills 拼命令的出错率）
     from .cli_args import normalize_global_project_root
@@ -610,11 +722,22 @@ def main() -> None:
         raise SystemExit(_run_script("archive_manager.py", [*forward_args, *rest]))
     if tool == "extract-context":
         return_args = [*forward_args, "--chapter", str(args.chapter), "--format", str(args.format)]
+        if args.output_file:
+            return_args.extend(["--output-file", str(args.output_file)])
         raise SystemExit(_run_script("extract_chapter_context.py", return_args))
+    if tool == "anti-ai":
+        anti_ai_args = [*forward_args]
+        if args.chapter is not None:
+            anti_ai_args.extend(["--chapter", str(args.chapter)])
+        if args.file:
+            anti_ai_args.extend(["--file", str(args.file)])
+        if args.json:
+            anti_ai_args.append("--json")
+        raise SystemExit(_run_script("anti_ai_checker.py", anti_ai_args))
     if tool == "review":
         if len(rest) > 0 and rest[0] == "merge":
             raise SystemExit(cmd_review_merge(args))
-        raise SystemExit(2)
+        raise SystemExit(cmd_review(args))
 
     # v5.23 健康检查
     if tool == "health":

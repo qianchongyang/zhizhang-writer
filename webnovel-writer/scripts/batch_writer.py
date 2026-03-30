@@ -124,9 +124,28 @@ class BatchWriter:
         return score >= self.min_quality_score
 
     def get_chapter_score(self, chapter: int) -> Optional[float]:
-        """获取章节质量分数（当前实现返回None，使用默认逻辑）"""
-        # 注：当前设计为优雅降级 - 无法获取分数时默认通过质量检查
-        return None
+        """获取章节质量分数，从 review protocol 文件读取"""
+        chapter_padded = f"{chapter:04d}"
+        protocol_path = (
+            self.project_root / ".webnovel" / "tmp" / "agent_outputs"
+            / f"review_merged_ch{chapter_padded}.json"
+        )
+        if not protocol_path.exists():
+            return None
+        try:
+            with open(protocol_path, encoding="utf-8") as f:
+                data = json.load(f)
+            score = data.get("overall_score")
+            if score is not None:
+                return float(score)
+            # 尝试从 anti_ai penalty 换算：100 - penalty = 质量分
+            anti_ai = data.get("anti_ai", {})
+            penalty = anti_ai.get("penalty")
+            if penalty is not None:
+                return max(0.0, 100.0 - float(penalty))
+            return None
+        except (json.JSONDecodeError, OSError):
+            return None
 
     def run(self):
         """执行批量写作"""
@@ -145,11 +164,13 @@ class BatchWriter:
 
             chapter = self.current_chapter
 
-            # 质量检查
-            if not self.check_quality(chapter):
-                print(f"⚠️ 第 {chapter} 章质量分数低于阈值，停止批量写作")
-                self.save_progress()
-                break
+            # 质量检查：检查上一章的质量分数（首次跳过）
+            prev_chapter = chapter - 1
+            if prev_chapter >= self.from_chapter:
+                if not self.check_quality(prev_chapter):
+                    print(f"⚠️ 第 {prev_chapter} 章质量分数低于阈值，停止批量写作")
+                    self.save_progress()
+                    break
             print(f"\n开始写入第 {chapter} 章")
 
             try:

@@ -136,6 +136,7 @@ def cmd_review(args: argparse.Namespace) -> int:
     from pathlib import Path
 
     chapter = args.chapter
+    review_type = getattr(args, "type", "anti-ai") or "anti-ai"
     project_root = _resolve_root(args.project_root)
     output_file = args.output_file
     output_json = args.json
@@ -143,6 +144,13 @@ def cmd_review(args: argparse.Namespace) -> int:
     if chapter is None:
         print("错误：review 需要 --chapter 参数", file=sys.stderr)
         return 2
+
+    # full 类型需要 Claude Code 环境，委托给 /zhizhang-review
+    if review_type == "full":
+        print("全套审查（一致性/OOC/追读力/爽点/节奏）需要 Claude Code 环境", file=sys.stderr)
+        print("请使用：/zhizhang-review 或 /zhizhang-write", file=sys.stderr)
+        print(f"anti-ai 审查（内核能力）仍可通过 --type anti-ai 单独执行", file=sys.stderr)
+        return 1
 
     # 调用 anti-ai checker
     anti_ai_args = [

@@ -95,7 +95,7 @@ class TestOutlineRuntime:
         runtime = OutlineRuntime()
         assert runtime.active_volume == 1
         assert runtime.active_window_start == 1
-        assert runtime.active_window_end == 50
+        assert runtime.active_window_end == 25
         assert runtime.window_version == 0
         assert runtime.baseline_anchor_version == 0
         assert runtime.last_adjustment_chapter is None
@@ -181,7 +181,7 @@ class TestNormalizeOutlineRuntime:
         data = {"active_window_start": 10}
         result = normalize_outline_runtime(data)
         assert result["active_window_start"] == 10
-        assert result["active_window_end"] == 50  # defaulted
+        assert result["active_window_end"] == 25  # defaulted
         assert result["active_volume"] == 1  # defaulted
 
     def test_wrong_types_corrected(self):
@@ -392,7 +392,7 @@ class TestEnsureOutlineRuntime:
 
         assert runtime.active_volume == 1
         assert runtime.active_window_start == 1
-        assert runtime.active_window_end == 50
+        assert runtime.active_window_end == 25
         assert runtime.window_version == 0
 
     def test_existing_project_with_adjustments(self, tmp_path):
@@ -515,7 +515,7 @@ class TestIntegration:
         assert loaded.active_window_start == 5
         # 缺失字段应该被填充默认值
         assert loaded.window_status == "active"
-        assert loaded.active_window_end == 50  # default
+        assert loaded.active_window_end == 25  # default
 
     def test_empty_project_load(self, tmp_path):
         """空项目应该能安全加载，不因缺字段崩溃"""

@@ -27,18 +27,37 @@ from __future__ import annotations
 import json
 import logging
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from .config import DataModulesConfig, get_config
-from .outline_runtime import (
-    OutlineRuntime,
-    OutlineNode,
-    NodeDependency,
-    load_outline_runtime,
-)
-from .mainline_anchor_manager import MainlineAnchorManager, PhaseCommitment
+# 修复：支持直接作为脚本运行（相对导入 + 绝对导入兼容）
+_script_dir = Path(__file__).resolve().parent
+_parent_dir = _script_dir.parent
+if str(_parent_dir) not in sys.path:
+    sys.path.insert(0, str(_parent_dir))
+
+# 使用 try/except 兼容相对导入（包内）和绝对导入（__main__）
+try:
+    from .config import DataModulesConfig, get_config
+    from .outline_runtime import (
+        OutlineRuntime,
+        OutlineNode,
+        NodeDependency,
+        load_outline_runtime,
+    )
+    from .mainline_anchor_manager import MainlineAnchorManager, PhaseCommitment
+except ImportError:
+    # Running as __main__ - 没有父包，使用绝对导入
+    from config import DataModulesConfig, get_config
+    from outline_runtime import (
+        OutlineRuntime,
+        OutlineNode,
+        NodeDependency,
+        load_outline_runtime,
+    )
+    from mainline_anchor_manager import MainlineAnchorManager, PhaseCommitment
 
 logger = logging.getLogger(__name__)
 
@@ -836,7 +855,10 @@ def create_impact_analyzer(
     Returns:
         已填充数据的 OutlineImpactAnalyzer 实例
     """
-    from .state_validator import normalize_story_memory
+    try:
+        from .state_validator import normalize_story_memory
+    except ImportError:
+        from state_validator import normalize_story_memory
 
     analyzer = OutlineImpactAnalyzer(config)
 
@@ -881,6 +903,12 @@ def create_impact_analyzer(
 def main():
     import argparse
     import sys
+    from pathlib import Path
+
+    # 修复：支持直接作为脚本运行
+    _script_dir = Path(__file__).resolve().parent
+    if str(_script_dir.parent) not in sys.path:
+        sys.path.insert(0, str(_script_dir.parent))
 
     parser = argparse.ArgumentParser(description="Outline Impact Analyzer CLI")
     parser.add_argument("--project-root", type=str, help="项目根目录")
@@ -894,7 +922,7 @@ def main():
     # 初始化
     config = None
     if args.project_root:
-        from .config import DataModulesConfig
+        from data_modules.config import DataModulesConfig
         config = DataModulesConfig.from_project_root(args.project_root)
 
     # 解析 chapter_result
@@ -916,7 +944,7 @@ def main():
 
     # 加载主线锚点
     if config:
-        from .mainline_anchor_manager import MainlineAnchorManager
+        from data_modules.mainline_anchor_manager import MainlineAnchorManager
         anchor_manager = MainlineAnchorManager(config)
         anchor_manager.load_anchors()
         analyzer.set_mainline_anchors(anchor_manager.get_all_anchors())

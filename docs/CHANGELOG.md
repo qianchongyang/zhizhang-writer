@@ -9,6 +9,50 @@
 - 首页、安装路径、命令、元数据、文档索引这些可见变化，都应该记录
 - 只记录结论和结果，不记录内部争论过程
 
+## v5.25.1 (2026-03-30)
+
+**动态大纲 Bug 修复版**
+
+### 核心修复
+
+1. **动态大纲模块调用路径修复**
+   - `outline_impact_analyzer.py` 和 `outline_mutation_engine.py` 现可作为脚本直接运行
+   - 使用 try/except 兼容相对导入（包内）和绝对导入（`__main__`）
+   - 新增 `outline_mutation_engine.py` 的 CLI 入口 `main()` 函数
+
+2. **CLI 测试 fixture 修复**
+   - 修复 8 个 CLI 测试的 `temp_project` fixture
+   - 正确创建 `.webnovel/state.json` 文件，避免 `FileNotFoundError`
+   - 测试用例覆盖：`test_entity_linker_cli`、`test_style_sampler_cli`、`test_migrate_state_cli_main`、`test_rag_adapter_cli`、`test_relationship_graph_cli_commands`、`test_sql_state_manager_export_protagonist_and_cli`
+
+3. **上下文契约版本更新**
+   - `context_contract_version` 从 `v2` 更新为 `v3`
+
+### 涉及文件
+
+| 文件 | 变更 |
+|------|------|
+| `config.py` | 相对导入改为 try/except 兼容 |
+| `mainline_anchor_manager.py` | 相对导入改为 try/except 兼容 |
+| `outline_impact_analyzer.py` | 模块导入 + 函数内导入兼容 + main() |
+| `outline_mutation_engine.py` | 模块导入兼容 + 新增 main() CLI 入口 |
+| `test_context_ranker.py` | 断言更新 v2→v3 |
+| `test_entity_linker_cli.py` | fixture 添加 state.json |
+| `test_style_sampler_cli.py` | fixture 添加 state.json |
+| `test_migrate_state_to_sqlite.py` | fixture 添加 state.json |
+| `test_rag_adapter.py` | fixture 添加 state.json |
+| `test_relationship_graph.py` | fixture 添加 state.json |
+| `test_sql_state_manager.py` | fixture 添加 state.json |
+
+### 验证方式
+
+```bash
+python3 -m pytest webnovel-writer/scripts/data_modules/tests/ -v
+# 期望：412 passed
+```
+
+---
+
 ## 2026-03-29：动态大纲能力文档补强
 
 ### 1. 首页强化动态大纲入口

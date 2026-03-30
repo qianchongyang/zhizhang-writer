@@ -22,6 +22,7 @@ from data_modules.index_manager import IndexManager
 def temp_project(tmp_path):
     cfg = DataModulesConfig.from_project_root(tmp_path)
     cfg.ensure_dirs()
+    cfg.state_file.write_text("{}", encoding="utf-8")
     return cfg
 
 
@@ -123,8 +124,8 @@ def test_migrate_state_verbose_and_dry_run(temp_project, capsys):
     assert "dry-run" in output or "dry run" in output
 
 
-def test_migrate_state_cli_main(tmp_path, monkeypatch, capsys):
-    project_root = tmp_path
+def test_migrate_state_cli_main(temp_project, monkeypatch, capsys):
+    project_root = temp_project.project_root
     args = [
         "migrate_state_to_sqlite",
         "--project-root",

@@ -15,7 +15,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .config import DataModulesConfig, get_config
+# 使用 try/except 兼容相对导入（包内）和绝对导入（__main__）
+try:
+    from .config import DataModulesConfig, get_config
+except ImportError:
+    from config import DataModulesConfig, get_config
 
 logger = logging.getLogger(__name__)
 

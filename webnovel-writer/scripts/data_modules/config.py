@@ -13,9 +13,17 @@ from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .runtime_compat import normalize_windows_path
+try:
+    from .runtime_compat import normalize_windows_path
+except ImportError:
+    # 当作为脚本直接运行时，没有父包，使用绝对导入
+    from runtime_compat import normalize_windows_path
 
-from .context_weights import TEMPLATE_WEIGHTS_DYNAMIC_DEFAULT
+try:
+    from .context_weights import TEMPLATE_WEIGHTS_DYNAMIC_DEFAULT
+except ImportError:
+    # 当作为脚本直接运行时，没有父包，使用绝对导入
+    from context_weights import TEMPLATE_WEIGHTS_DYNAMIC_DEFAULT
 
 def _get_user_claude_root() -> Path:
     raw = os.environ.get("WEBNOVEL_CLAUDE_HOME") or os.environ.get("CLAUDE_HOME")

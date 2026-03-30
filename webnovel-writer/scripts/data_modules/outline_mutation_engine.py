@@ -24,17 +24,32 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .config import DataModulesConfig, get_config
-from .mainline_anchor_manager import AdjustmentDeclaration, MainlineAnchorManager
-from .outline_runtime import (
-    OutlineAdjustment,
-    OutlineNode,
-    OutlineRuntime,
-    append_outline_adjustment,
-    load_outline_adjustments,
-    load_outline_runtime,
-    save_outline_runtime,
-)
+# 使用 try/except 兼容相对导入（包内）和绝对导入（__main__）
+try:
+    from .config import DataModulesConfig, get_config
+    from .mainline_anchor_manager import AdjustmentDeclaration, MainlineAnchorManager
+    from .outline_runtime import (
+        OutlineAdjustment,
+        OutlineNode,
+        OutlineRuntime,
+        append_outline_adjustment,
+        load_outline_adjustments,
+        load_outline_runtime,
+        save_outline_runtime,
+    )
+except ImportError:
+    # Running as __main__ - 没有父包，使用绝对导入
+    from config import DataModulesConfig, get_config
+    from mainline_anchor_manager import AdjustmentDeclaration, MainlineAnchorManager
+    from outline_runtime import (
+        OutlineAdjustment,
+        OutlineNode,
+        OutlineRuntime,
+        append_outline_adjustment,
+        load_outline_adjustments,
+        load_outline_runtime,
+        save_outline_runtime,
+    )
 
 logger = logging.getLogger(__name__)
 
@@ -710,3 +725,80 @@ def execute_adjustment(
     """
     engine = create_mutation_engine(config, anchor_manager)
     return engine.execute_mutation(request)
+
+
+# ============================================================================
+# CLI Entry Point
+# ============================================================================
+
+def main():
+    import argparse
+    import sys
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description="Outline Mutation Engine CLI")
+    parser.add_argument("--project-root", type=str, required=True, help="项目根目录")
+    parser.add_argument("--action-type", type=str, required=True,
+                        choices=["minor_reorder", "insert_arc", "window_extend", "manual_block"],
+                        help="动作类型")
+    parser.add_argument("--trigger-chapter", type=int, required=True, help="触发章节号")
+    parser.add_argument("--reason", type=str, required=True, help="调整原因")
+    parser.add_argument("--impact-preview", type=str, required=True, help="影响预览")
+    parser.add_argument("--affected-chapters", type=str, default="", help="受影响的章节（逗号分隔）")
+    parser.add_argument("--output-file", type=str, default=None, help="输出到文件")
+
+    args = parser.parse_args()
+
+    # 初始化配置
+    from data_modules.config import DataModulesConfig
+    config = DataModulesConfig.from_project_root(args.project_root)
+
+    # 解析 affected_chapters
+    affected_chapters = []
+    if args.affected_chapters:
+        try:
+            affected_chapters = [int(x.strip()) for x in args.affected_chapters.split(",") if x.strip()]
+        except ValueError:
+            print("ERROR: --affected-chapters must be comma-separated integers", file=sys.stderr)
+            sys.exit(1)
+
+    # 创建请求
+    request = MutationRequest(
+        action_type=args.action_type,
+        trigger_chapter=args.trigger_chapter,
+        reason=args.reason,
+        impact_preview=args.impact_preview,
+        affected_chapters=affected_chapters,
+    )
+
+    # 执行
+    engine = create_mutation_engine(config)
+    result = engine.execute_mutation(request)
+
+    # 输出
+    import json
+    output = {
+        "success": result.success,
+        "adjustment_id": result.adjustment_id,
+        "error": result.error,
+        "rolled_back": result.rolled_back,
+        "rollback_reason": result.rollback_reason,
+        "affected_chapters": result.affected_chapters,
+        "before_window": result.before_window,
+        "after_window": result.after_window,
+    }
+
+    if args.output_file:
+        output_path = Path(args.output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(output, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+        print(f"Mutation result written to {args.output_file}", file=sys.stderr)
+    else:
+        print(json.dumps(output, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()

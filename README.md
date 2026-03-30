@@ -3,7 +3,7 @@
 [![License](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Compatible-purple.svg)](https://claude.ai/claude-code)
-[![Version](https://img.shields.io/badge/version-v5.25.0-blue.svg)](https://github.com/qianchongyang/zhizhang-writer)
+[![Version](https://img.shields.io/badge/version-v5.25.1-blue.svg)](https://github.com/qianchongyang/zhizhang-writer)
 
 > **长篇网文连载辅助系统**：自动追踪设定/状态/伏笔，六维审查防冲突，动态大纲随写随调，200 万字不乱。
 
@@ -150,6 +150,7 @@ PROJECT_ROOT/
 
 | 版本 | 说明 |
 |------|------|
+| **v5.25.1** | 动态大纲 Bug 修复：模块调用路径 + CLI 测试 fixture + 上下文契约版本 |
 | **v5.25.0** | 动态大纲正式上线：Step 5.5A/5.5B 内嵌到写作主流程，窗口自动评估/扩展/阻断，完整原子性保证 |
 | **v5.24.0** | 读者反馈 + 追读力经营模块 |
 | **v5.23.0** | 健康检查 + 一致性修复 |

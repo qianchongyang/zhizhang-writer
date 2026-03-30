@@ -239,3 +239,62 @@ def test_cleanup_artifacts_confirm_deletes_with_backup(tmp_path, monkeypatch):
     backup_dir = tmp_path / ".webnovel" / "recovery_backups"
     backups = list(backup_dir.glob("ch0008-*"))
     assert backups
+
+
+def test_workflow_normalizes_protocol_artifacts(tmp_path, monkeypatch):
+    module = _load_module()
+    monkeypatch.setattr(module, "find_project_root", lambda: tmp_path)
+
+    scripts_dir = Path(__file__).resolve().parents[2]
+    if str(scripts_dir) not in sys.path:
+        sys.path.insert(0, str(scripts_dir))
+    from data_modules.agent_protocol import write_protocol_json
+
+    webnovel_dir = tmp_path / ".webnovel"
+    webnovel_dir.mkdir(parents=True, exist_ok=True)
+
+    review_path = tmp_path / ".webnovel" / "tmp" / "agent_outputs" / "review_merged_ch0012.json"
+    data_path = tmp_path / ".webnovel" / "tmp" / "agent_outputs" / "data_ch0012.json"
+
+    write_protocol_json(
+        review_path,
+        {
+            "version": "1.0",
+            "type": "review_merged",
+            "chapter": 12,
+            "timestamp": "2026-03-30T00:00:00Z",
+            "anti_ai": {"pass": True, "penalty": 5, "rewrite_required": False},
+        },
+    )
+    write_protocol_json(
+        data_path,
+        {
+            "version": "1.0",
+            "type": "data_write",
+            "chapter": 12,
+            "timestamp": "2026-03-30T00:00:00Z",
+            "state_updated": True,
+            "index_updated": True,
+            "summary_written": True,
+            "rag_indexed": False,
+            "artifacts": {"summary": ".webnovel/summaries/ch0012.md"},
+        },
+    )
+
+    module.start_task("webnovel-write", {"chapter_num": 12})
+    module.start_step("Step 3", "Review")
+    module.complete_step("Step 3", json.dumps({"review_protocol": str(review_path)}, ensure_ascii=False))
+    module.start_step("Step 5", "Data Agent")
+    module.complete_step("Step 5", json.dumps({"data_protocol": str(data_path)}, ensure_ascii=False))
+    module.complete_task(json.dumps({"review_protocol": str(review_path), "data_protocol": str(data_path)}, ensure_ascii=False))
+
+    state = module.load_state()
+    artifacts = state["last_stable_state"]["artifacts"]
+    assert artifacts["review_completed"] is True
+    assert artifacts["anti_ai_pass"] is True
+    assert artifacts["anti_ai_penalty"] == 5
+    assert artifacts["state_json_modified"] is True
+    assert artifacts["index_updated"] is True
+    assert artifacts["summary_written"] is True
+    assert artifacts["protocol_outputs"]["review"]["verified"] is True
+    assert artifacts["protocol_outputs"]["data_write"]["verified"] is True

@@ -1,6 +1,8 @@
 # 系统架构与模块设计
 
 > 兼容说明：本页仍沿用历史实现名词（如 `webnovel.py`、`webnovel-writer`），用于描述当前代码结构；对外品牌建议统一为 `织章 Zhizhang Writer`。
+>
+> 状态说明（2026-03-30）：本文同时包含主线已落地能力与动态大纲目标设计。若与 `main` 代码不一致，以 `main` 的统一 CLI、脚本和测试为准。
 
 ## 核心理念
 
@@ -42,7 +44,7 @@
 │ Data Layer: state.json / story_memory.json / index.db / vectors.db  │
 │             project_memory.json / story_technique_blueprint.json     │
 │             control/chapter_intents / chapter_technique_plans        │
-│             outline_runtime.json / outline_adjustments.jsonl (v5.25)  │
+│             outline_runtime.json / outline_adjustments.jsonl           │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -306,9 +308,10 @@ python reader_feedback.py --templates
 - 按类型加权统计
 - 生成追读力风险预警
 
-## v5.25 动态大纲版
+## v5.25 动态大纲版（目标设计，未完整并入主线）
 
-**目标**：将大纲调整内嵌到写作主流程，实现"写完一章自动评估后续窗口"。
+**目标**：将大纲调整内嵌到写作主流程，实现“写完一章自动评估后续窗口”。
+当前 `main` 上已确认存在的是运行时存储层，完整解析/分析/执行链路仍以动态大纲分支为准。
 
 ### 核心改进
 
@@ -393,5 +396,5 @@ Step 6: Git 备份（调纲失败时阻断）
 
 ### 与 /zhizhang-adjust 的关系
 
-- `/zhizhang-write` 内嵌的 Step 5.5A/5.5B 处理**常规动态调整**
+- 目标形态中，`/zhizhang-write` 内嵌的 Step 5.5A/5.5B 处理常规动态调整
 - `/zhizhang-adjust` 用于**调试/极端修复**，不推荐常规使用

@@ -1,8 +1,8 @@
 # 织章 Zhizhang Writer — 操作手册
 
-> **版本**：v5.25.0（动态大纲版）
+> **版本**：v5.25.0
 > **命令前缀**：`/zhizhang-*` 为对外别名，内部实现委托 `/webnovel-*`
-> **交互入口**：`/zhizhang-menu` 或 `/cnw` 可用文字菜单选择所有功能
+> **状态说明（2026-03-30）**：本文以 `main` 主线已验证能力为准。动态大纲完整链路尚未并入主线；`/zhizhang-menu` 当前也不是“所有功能的完整执行入口”。
 
 ---
 
@@ -91,12 +91,12 @@ Step 5: Data Agent（数据落盘）
   ├─ G: RAG 向量索引（已配置Embedding时）
   └─ H: 风格样本（仅 score ≥ 80 时）
 
-Step 5.5A: 动态大纲评估（自动）
+Step 5.5A: 动态大纲评估（设计目标，未并入主线）
   ├─ 评估当前窗口是否需要调整
   ├─ 分析插入副本/重排的影响范围
   └─ 若需要调整 → 进入 Step 5.5B
 
-Step 5.5B: 动态大纲执行（自动）
+Step 5.5B: 动态大纲执行（设计目标，未并入主线）
   ├─ 扩展活动窗口
   ├─ 插入铺垫章节
   └─ 更新 outline_runtime.json + outline_adjustments.jsonl
@@ -114,9 +114,9 @@ Step 6: Git 备份
 - 核心 3 审查器并行执行（更快）
 - 适合：每日赶更新、不需要精修的章节
 
-### 动态大纲（Step 5.5A/5.5B）
+### 动态大纲（Step 5.5A/5.5B，设计中）
 
-**这是 v5.25.0 的核心新特性**，在 Step 5 完成后自动触发：
+以下内容描述的是目标形态与动态大纲分支实现方向，不代表 `main` 已具备完整自动链路：
 
 - **Step 5.5A 影响分析**：评估后续窗口是否需要插入副本（铺垫章节）、章节重排、活动窗口扩展
 - **Step 5.5B 执行调整**：在影响可接受时自动扩展窗口，同时通过锚点保护确保不偏离主线
@@ -312,7 +312,7 @@ Step 5: 继续任务（可选）
 
 **命令**：`/zhizhang-adjust`
 
-> **注意**：这是调试/极端修复模式。常规写作不需要此命令，因为动态大纲（Step 5.5A/5.5B）已在 `/zhizhang-write` 内嵌处理。
+> **注意**：这是调试/极端修复模式。动态大纲完整链路目前未并入 `main`，因此这里不能视为“主线已自动内嵌”的已验证能力。
 
 **适用场景**：
 - 调试：大纲存在逻辑错误需要人工定位
@@ -336,13 +336,15 @@ Step 5: 继续任务（可选）
 
 **命令**：`/zhizhang-menu` 或 `/cnw`
 
-文字菜单，可视化程度低的环境下也能用。覆盖所有功能的文字入口。
+文字菜单，可视化程度低的环境下也能用。
+当前主线中它更接近导航页与局部工具页，不应视为覆盖所有功能的完整执行入口。
 
 ---
 
 ### B. 统一 CLI（webnovel.py）
 
-所有功能也通过 `webnovel.py` 脚本提供，格式：
+`webnovel.py` 是内核层统一 CLI，提供稳定的底层脚本入口，但不等于所有对外命令都有同名 CLI 子命令。
+当前应以 `python webnovel.py --help` 的真实输出为准：
 
 ```bash
 # 环境校验
@@ -373,6 +375,11 @@ python webnovel.py backup "第45章提交"
 python webnovel.py merge --group1 rev1.json --group2 rev2.json --output merged.json
 ```
 
+说明：
+- 当前 `main` 没有 `write` 子命令。
+- 当前 `review` 在统一 CLI 中只有占位和 `merge` 相关能力，完整审查流程仍依赖 Skill 编排。
+- `/zhizhang-write`、`/zhizhang-review` 是对外协作入口，不等于内核层存在同名完整 CLI。
+
 ---
 
 ### C. 数据文件说明
@@ -382,8 +389,8 @@ python webnovel.py merge --group1 rev1.json --group2 rev2.json --output merged.j
 | `.webnovel/state.json` | 运行时真相（角色状态/关系/势力/时间线/伏笔） |
 | `.webnovel/index.db` | SQLite 实体索引（角色/别名/关系/状态变化） |
 | `.webnovel/vectors.db` | SQLite RAG 向量（语义检索） |
-| `.webnovel/outline_runtime.json` | 动态大纲运行层（v5.25 新增） |
-| `.webnovel/outline_adjustments.jsonl` | 动态大纲调整记录（v5.25 新增） |
+| `.webnovel/outline_runtime.json` | 动态大纲运行层（主线已存在） |
+| `.webnovel/outline_adjustments.jsonl` | 动态大纲调整记录（待完整链路并入主线后再视为稳定能力） |
 | `.webnovel/project_config.json` | 项目级配置（可覆盖 default_window_size） |
 | `.webnovel/summaries/ch*.md` | 章节摘要（供后续章节消费） |
 | `.webnovel/story_memory.json` | 跨章节稳定记忆层 |
@@ -396,9 +403,9 @@ python webnovel.py merge --group1 rev1.json --group2 rev2.json --output merged.j
 
 | 参数 | 可用命令 | 用途 |
 |------|---------|------|
-| `--turbo` | write | 跳过风格适配+润色，核心3审查器并行，追求日更速度 |
-| `--fast` | write | 跳过风格适配，标准流程其余步骤完整执行 |
-| `--minimal` | write | 仅核心3审查器，跳过条件审查器 |
+| `--turbo` | `/zhizhang-write` | 跳过风格适配+润色，核心3审查器并行，追求日更速度 |
+| `--fast` | `/zhizhang-write` | 跳过风格适配，标准流程其余步骤完整执行 |
+| `--minimal` | `/zhizhang-write` | 仅核心3审查器，跳过条件审查器 |
 | `--focus strand` | status | Strand Weave 节奏分析 |
 | `--focus urgency` | status | 伏笔紧急度分析 |
 | `--focus characters` | status | 角色掉线分析 |
@@ -439,7 +446,8 @@ python webnovel.py merge --group1 rev1.json --group2 rev2.json --output merged.j
 
 ### G. 批量写作（高级）
 
-面向自动化工作流（日更脚本、CI/CD、无人值守）：
+面向自动化工作流（日更脚本、CI/CD、无人值守）。
+状态说明：批量能力存在脚本实现，但质量闸门尚未完全闭环，当前应按“高级/实验性”理解。
 
 ```bash
 python webnovel.py batch run --from 10 --to 40

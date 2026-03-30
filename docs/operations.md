@@ -227,6 +227,10 @@ python -X utf8 "${SCRIPTS_DIR}/webnovel.py" --project-root "${PROJECT_ROOT}" \
 
 ## v5.21 Anti-AI 检查
 
+> 状态说明（2026-03-30）：
+> 当前 `main` 上统一 CLI 尚未提供 `review --chapter` 这种完整审查入口。
+> 下述命令属于目标形态，现阶段应优先通过 `/zhizhang-review` 所在的 Skill 编排链路执行。
+
 ### 检查章节去AI味指标
 
 ```bash
@@ -239,6 +243,10 @@ Anti-AI 惩罚分超过 30 分或命中致命线会触发局部重写。
 ---
 
 ## v5.22 Turbo 模式
+
+> 状态说明（2026-03-30）：
+> 当前 `main` 上统一 CLI 尚未提供 `write --chapter` 子命令。
+> `/zhizhang-write --turbo` 属于对外协作入口，不等于内核层已暴露同名 CLI。
 
 ### 使用 Turbo 模式快速写作
 

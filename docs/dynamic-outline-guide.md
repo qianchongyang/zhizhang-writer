@@ -1,6 +1,11 @@
 # 动态大纲手册
 
-这份手册解释织章的动态大纲是怎么工作的，以及你在日常写作里应该怎么用它。
+> 状态说明（2026-03-30）：
+> 本文描述的是动态大纲的目标设计与 `feature/dynamic-outline` 分支中的实现方向。
+> 当前 `main` 主线已落地的只有 `outline_runtime.py` 运行时存储层，尚未包含完整的解析、影响分析、变更执行链路。
+> 因此本文不能视为 `main` 的已验证能力说明；在主线合并完成前，应按“设计中/未并入主线”理解。
+
+这份手册解释织章的动态大纲设计目标、预期工作方式，以及后续合并完成后你应如何使用它。
 
 ---
 
@@ -23,7 +28,7 @@
 
 ## 2. 它的工作原理
 
-动态大纲不是单独一套手工脚本，而是已经嵌进 `/zhizhang-write` 主流程。
+目标形态上，动态大纲不是单独一套手工脚本，而是应嵌进 `/zhizhang-write` 主流程。
 
 ### 2.1 初始化阶段
 
@@ -37,7 +42,7 @@
 
 ### 2.2 写作阶段
 
-当你执行 `/zhizhang-write 14` 时，主流程大致是：
+设计目标里，当你执行 `/zhizhang-write 14` 时，主流程大致是：
 
 1. 读取第 14 章大纲和上下文
 2. 生成正文
@@ -117,7 +122,7 @@
 
 ## 4. 你会看到什么结果
 
-动态大纲正常工作时，你会看到这些结果：
+当完整链路合并到主线并正常工作时，你会看到这些结果：
 
 - 写下一章后，后续章纲不再是僵死的
 - 副本或关系弧线会被自动识别并纳入窗口
@@ -133,12 +138,12 @@
 
 ## 5. 关键文件在哪里
 
-如果你想看系统如何实现动态大纲，可以看这些文件：
+如果你想看动态大纲相关实现和设计线索，可以看这些文件：
 
 - `/Users/zhoukai/code/webnovel-writer/webnovel-writer/scripts/data_modules/outline_runtime.py`
-- `/Users/zhoukai/code/webnovel-writer/webnovel-writer/scripts/data_modules/outline_window_parser.py`
-- `/Users/zhoukai/code/webnovel-writer/webnovel-writer/scripts/data_modules/outline_impact_analyzer.py`
-- `/Users/zhoukai/code/webnovel-writer/webnovel-writer/scripts/data_modules/outline_mutation_engine.py`
+- `/Users/zhoukai/code/webnovel-writer/webnovel-writer/scripts/data_modules/outline_window_parser.py`（当前不在 `main`）
+- `/Users/zhoukai/code/webnovel-writer/webnovel-writer/scripts/data_modules/outline_impact_analyzer.py`（当前不在 `main`）
+- `/Users/zhoukai/code/webnovel-writer/webnovel-writer/scripts/data_modules/outline_mutation_engine.py`（当前不在 `main`）
 - `/Users/zhoukai/code/webnovel-writer/webnovel-writer/scripts/workflow_manager.py`
 - `/Users/zhoukai/code/webnovel-writer/webnovel-writer/skills/webnovel-write/SKILL.md`
 
@@ -200,4 +205,3 @@
 ## 8. 一句话总结
 
 动态大纲的目标不是让故事“更自由地乱跑”，而是让故事在不偏离主线的前提下，能够随着剧情自然生长。
-
